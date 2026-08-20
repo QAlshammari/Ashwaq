@@ -9,6 +9,7 @@ const $ = id => document.getElementById(id);
 const REPORT_WIDTH = 1120;
 const SAVED_RANGE_KEY = 'qOptionsSelectedReportRange';
 const MANUAL_WEEKS_KEY = 'qOptionsManualTradesByWeekV1';
+const EXCEL_RANGES_KEY = 'qOptionsExcelTradesByRangeV1';
 const MANUAL_DRAFTS_KEY = 'qOptionsManualDraftsByWeekV1';
 const MANUAL_PAGE_OPEN_KEY = 'qOptionsManualPageOpenV1';
 
@@ -20,6 +21,11 @@ function selectedWeekKey(){
 
 function readManualWeeks(){
   try{return JSON.parse(localStorage.getItem(MANUAL_WEEKS_KEY)||'{}')||{}}
+  catch(_e){return {}}
+}
+
+function readExcelRanges(){
+  try{return JSON.parse(localStorage.getItem(EXCEL_RANGES_KEY)||'{}')||{}}
   catch(_e){return {}}
 }
 
@@ -105,13 +111,12 @@ function mergeTradesWithoutDuplicates(existing,incoming){
 }
 
 function saveImportedTradesToSelectedWeek(importedTrades){
-  activeManualWeekKey=selectedWeekKey();
-  const weeks=readManualWeeks();
-  const saved=Array.isArray(weeks[activeManualWeekKey])?weeks[activeManualWeekKey]:[];
-  manualTrades=mergeTradesWithoutDuplicates(saved,importedTrades);
-  weeks[activeManualWeekKey]=manualTrades;
-  localStorage.setItem(MANUAL_WEEKS_KEY,JSON.stringify(weeks));
-  return manualTrades;
+  const rangeKey=selectedWeekKey();
+  const ranges=readExcelRanges();
+  const saved=Array.isArray(ranges[rangeKey])?ranges[rangeKey]:[];
+  ranges[rangeKey]=mergeTradesWithoutDuplicates(saved,importedTrades);
+  localStorage.setItem(EXCEL_RANGES_KEY,JSON.stringify(ranges));
+  return ranges[rangeKey];
 }
 
 function parseStoredRangeKey(key){
@@ -124,13 +129,15 @@ function parseStoredRangeKey(key){
 function storedTradesForSelectedRange(){
   const selectedFrom=$('fromDate')?.value || currentWeekRange().from;
   const selectedTo=$('toDate')?.value || currentWeekRange().to;
-  const weeks=readManualWeeks();
+  const stores=[readManualWeeks(),readExcelRanges()];
   const collected=[];
-  Object.entries(weeks).forEach(([key,list])=>{
-    const range=parseStoredRangeKey(key);
-    if(!range || !Array.isArray(list)) return;
-    // يشمل كل أسبوع أو نطاق محفوظ يتقاطع مع الأسبوع/الشهر المحدد.
-    if(range.to>=selectedFrom && range.from<=selectedTo) collected.push(...list);
+  stores.forEach(store=>{
+    Object.entries(store).forEach(([key,list])=>{
+      const range=parseStoredRangeKey(key);
+      if(!range || !Array.isArray(list)) return;
+      // يشمل كل أسبوع أو نطاق محفوظ يتقاطع مع الأسبوع/الشهر المحدد.
+      if(range.to>=selectedFrom && range.from<=selectedTo) collected.push(...list);
+    });
   });
   return mergeTradesWithoutDuplicates([],collected).filter(trade=>{
     // الصفقات المؤرخة تُفلتر بدقة داخل الشهر، وغير المؤرخة تبقى ضمن نطاق حفظها.
