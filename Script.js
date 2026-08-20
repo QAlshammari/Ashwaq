@@ -2,6 +2,7 @@ let trades = [];
 let equityChart, dailyChart, winLossChart;
 let importedWorkbookActive = false;
 let manualTrades = [];
+let manualEditIndex = -1;
 
 const $ = id => document.getElementById(id);
 const REPORT_WIDTH = 1120;
@@ -1051,7 +1052,7 @@ function updateManualWeekRange(){
 
 function renderManualTrades(){
   const body=$('manualTradesBody');
-  body.innerHTML=manualTrades.map((t,i)=>`<tr><td>${escapeHtml(t.symbol)}</td><td>${escapeHtml(t.option)}</td><td>${escapeHtml(t.strike)}</td><td>${Number(t.buy).toFixed(2)}</td><td>${Number(t.sell).toFixed(2)}</td><td>${escapeHtml(t.notes||'—')}</td><td><button type="button" class="manual-delete" data-index="${i}">حذف</button></td></tr>`).join('');
+  body.innerHTML=manualTrades.map((t,i)=>`<tr><td>${escapeHtml(t.symbol)}</td><td>${escapeHtml(t.option)}</td><td>${escapeHtml(t.strike)}</td><td>${Number(t.buy).toFixed(2)}</td><td>${Number(t.sell).toFixed(2)}</td><td>${escapeHtml(t.notes||'—')}</td><td><button type="button" class="manual-edit" data-index="${i}">تعديل</button><button type="button" class="manual-delete" data-index="${i}">حذف</button></td></tr>`).join('');
   $('manualCount').textContent=`${manualTrades.length} صفقة`;
   $('manualEmpty').hidden=manualTrades.length>0;
 }
@@ -1078,6 +1079,28 @@ function applyManualTrades(closePage=true){
   return true;
 }
 
+function resetManualEditor(){
+  manualEditIndex=-1;
+  $('manualTradeForm').reset();
+  $('manualSubmit').textContent='إضافة الصفقة';
+  $('manualCancelEdit').hidden=true;
+}
+
+function startManualEdit(index){
+  const t=manualTrades[index];
+  if(!t) return;
+  manualEditIndex=index;
+  $('manualSymbol').value=t.symbol;
+  $('manualOption').value=t.option;
+  $('manualStrike').value=t.strike;
+  $('manualBuy').value=t.buy;
+  $('manualSell').value=t.sell;
+  $('manualNotes').value=t.notes||'';
+  $('manualSubmit').textContent='حفظ التعديل';
+  $('manualCancelEdit').hidden=false;
+  $('manualTradeForm').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
 $('excelFile').addEventListener('change',e=>{const f=e.target.files[0];if(f) handleFile(f)});
 $('demoBtn').addEventListener('click',openManualEntry);
 $('manualClose').addEventListener('click',closeManualEntry);
@@ -1085,13 +1108,27 @@ $('manualTradeForm').addEventListener('submit',e=>{
   e.preventDefault();
   const buy=num($('manualBuy').value),sell=num($('manualSell').value);
   const date=$('fromDate').value || currentWeekRange().from;
-  manualTrades.push({date,symbol:$('manualSymbol').value.trim().toUpperCase(),option:$('manualOption').value,strike:$('manualStrike').value,buy,sell,profit:(sell-buy)*100,pct:buy?(sell-buy)/buy*100:0,notes:$('manualNotes').value.trim()});
-  e.target.reset();
+  const updatedTrade={date,symbol:$('manualSymbol').value.trim().toUpperCase(),option:$('manualOption').value,strike:$('manualStrike').value,buy,sell,profit:(sell-buy)*100,pct:buy?(sell-buy)/buy*100:0,notes:$('manualNotes').value.trim()};
+  const wasEditing=manualEditIndex>=0;
+  if(wasEditing) manualTrades[manualEditIndex]=updatedTrade;
+  else manualTrades.push(updatedTrade);
+  resetManualEditor();
   renderManualTrades();
   $('manualSymbol').focus();
-  showToast('تمت إضافة الصفقة');
+  showToast(wasEditing?'تم تعديل الصفقة':'تمت إضافة الصفقة');
 });
-$('manualTradesBody').addEventListener('click',e=>{const btn=e.target.closest('.manual-delete');if(!btn)return;manualTrades.splice(Number(btn.dataset.index),1);renderManualTrades()});
+$('manualTradesBody').addEventListener('click',e=>{
+  const edit=e.target.closest('.manual-edit');
+  if(edit){startManualEdit(Number(edit.dataset.index));return}
+  const del=e.target.closest('.manual-delete');
+  if(!del)return;
+  const index=Number(del.dataset.index);
+  manualTrades.splice(index,1);
+  if(manualEditIndex===index) resetManualEditor();
+  else if(manualEditIndex>index) manualEditIndex--;
+  renderManualTrades();
+});
+$('manualCancelEdit').addEventListener('click',resetManualEditor);
 $('manualApply').addEventListener('click',()=>applyManualTrades(true));
 $('manualPdf').addEventListener('click',()=>{if(applyManualTrades(true)) exportPdf()});
 $('manualImage').addEventListener('click',()=>{if(applyManualTrades(true)) openTopTradesPreview()});
