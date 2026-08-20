@@ -80,6 +80,65 @@ function saveActiveManualWeek(){
   }catch(_e){}
 }
 
+function tradeStorageSignature(trade){
+  return [
+    parseDate(trade?.date)||'',
+    String(trade?.symbol||'').trim().toUpperCase(),
+    String(trade?.option||'').trim().toUpperCase(),
+    String(trade?.strike||'').trim(),
+    Number(trade?.buy)||0,
+    trade?.sell===null || trade?.sell===undefined || trade?.sell==='' ? 'OPEN' : Number(trade.sell),
+    String(trade?.notes||'').trim()
+  ].join('|');
+}
+
+function mergeTradesWithoutDuplicates(existing,incoming){
+  const merged=[];
+  const seen=new Set();
+  [...(Array.isArray(existing)?existing:[]),...(Array.isArray(incoming)?incoming:[])].forEach(trade=>{
+    const key=tradeStorageSignature(trade);
+    if(seen.has(key)) return;
+    seen.add(key);
+    merged.push({...trade});
+  });
+  return merged;
+}
+
+function saveImportedTradesToSelectedWeek(importedTrades){
+  activeManualWeekKey=selectedWeekKey();
+  const weeks=readManualWeeks();
+  const saved=Array.isArray(weeks[activeManualWeekKey])?weeks[activeManualWeekKey]:[];
+  manualTrades=mergeTradesWithoutDuplicates(saved,importedTrades);
+  weeks[activeManualWeekKey]=manualTrades;
+  localStorage.setItem(MANUAL_WEEKS_KEY,JSON.stringify(weeks));
+  return manualTrades;
+}
+
+function parseStoredRangeKey(key){
+  const [from,to]=String(key||'').split('__');
+  return /^\d{4}-\d{2}-\d{2}$/.test(from||'') && /^\d{4}-\d{2}-\d{2}$/.test(to||'')
+    ? {from,to}
+    : null;
+}
+
+function storedTradesForSelectedRange(){
+  const selectedFrom=$('fromDate')?.value || currentWeekRange().from;
+  const selectedTo=$('toDate')?.value || currentWeekRange().to;
+  const weeks=readManualWeeks();
+  const collected=[];
+  Object.entries(weeks).forEach(([key,list])=>{
+    const range=parseStoredRangeKey(key);
+    if(!range || !Array.isArray(list)) return;
+    // يشمل كل أسبوع أو نطاق محفوظ يتقاطع مع الأسبوع/الشهر المحدد.
+    if(range.to>=selectedFrom && range.from<=selectedTo) collected.push(...list);
+  });
+  return mergeTradesWithoutDuplicates([],collected).filter(trade=>{
+    // الصفقات المؤرخة تُفلتر بدقة داخل الشهر، وغير المؤرخة تبقى ضمن نطاق حفظها.
+    const date=parseDate(trade?.date);
+    return !date || (date>=selectedFrom && date<=selectedTo);
+  });
+}
+
 function loadSelectedManualWeek(){
   saveActiveManualWeek();
   activeManualWeekKey=selectedWeekKey();
@@ -447,7 +506,10 @@ async function handleFile(file){
       return;
     }
 
-    trades=[...normalized];
+    // صفقات Excel تُحفظ داخل الأسبوع المحدد مثل الصفقات اليدوية، مع إبقاء
+    // الصفقات السابقة ومنع تكرار الصفوف عند رفع الملف نفسه مرة أخرى.
+    saveImportedTradesToSelectedWeek(normalized);
+    trades=storedTradesForSelectedRange().map(t=>({...t}));
     importedWorkbookActive=true;
     // لا نسمح لملف Excel بتغيير التاريخ الذي اختاره المستخدم.
     saveSelectedRange();
@@ -458,7 +520,7 @@ async function handleFile(file){
     render();
     setTimeout(render,80);
     setTimeout(render,260);
-    showToast(`تم تحميل ${trades.length} صفقة بنجاح`);
+    showToast(`تم حفظ ${normalized.length} صفقة في الأسبوع المحدد`);
   }catch(err){
     console.error(err);
     showToast('تعذر قراءة الملف. استخدم XLSX أو CSV بالقالب المرفق');
@@ -1159,7 +1221,8 @@ function closeManualEntry(){
 function applyManualTrades(closePage=true){
   if(!manualTrades.length){showToast('أضف صفقة واحدة على الأقل');return false}
   importedWorkbookActive=true;
-  trades=manualTrades.map(t=>({...t}));
+  saveActiveManualWeek();
+  trades=storedTradesForSelectedRange().map(t=>({...t}));
   render();
   if(closePage) closeManualEntry();
   showToast('تم تحديث التقرير بالصفقات المدخلة');
@@ -1234,9 +1297,10 @@ window.addEventListener('resize',()=>{if(!$('previewModal')?.hidden) fitLivePrev
 function handleSelectedWeekChange(){
   saveSelectedRange();
   loadSelectedManualWeek();
-  if(manualTrades.length){
+  const storedRangeTrades=storedTradesForSelectedRange();
+  if(storedRangeTrades.length){
     importedWorkbookActive=true;
-    trades=manualTrades.map(t=>({...t}));
+    trades=storedRangeTrades.map(t=>({...t}));
   }else{
     importedWorkbookActive=false;
     trades=[];
@@ -1253,9 +1317,10 @@ if(!restoreSelectedRange()){
 }
 activeManualWeekKey=selectedWeekKey();
 manualTrades=readManualWeeks()[activeManualWeekKey]||[];
-if(manualTrades.length){
+const initialStoredRangeTrades=storedTradesForSelectedRange();
+if(initialStoredRangeTrades.length){
   importedWorkbookActive=true;
-  trades=manualTrades.map(t=>({...t}));
+  trades=initialStoredRangeTrades.map(t=>({...t}));
 }else{
   trades=buildDemoTrades();
 }
