@@ -9,6 +9,8 @@ const $ = id => document.getElementById(id);
 const REPORT_WIDTH = 1120;
 const SAVED_RANGE_KEY = 'qOptionsSelectedReportRange';
 const MANUAL_WEEKS_KEY = 'qOptionsManualTradesByWeekV1';
+const MANUAL_DRAFTS_KEY = 'qOptionsManualDraftsByWeekV1';
+const MANUAL_PAGE_OPEN_KEY = 'qOptionsManualPageOpenV1';
 
 function selectedWeekKey(){
   const from=$('fromDate')?.value || currentWeekRange().from;
@@ -19,6 +21,54 @@ function selectedWeekKey(){
 function readManualWeeks(){
   try{return JSON.parse(localStorage.getItem(MANUAL_WEEKS_KEY)||'{}')||{}}
   catch(_e){return {}}
+}
+
+function readManualDrafts(){
+  try{return JSON.parse(localStorage.getItem(MANUAL_DRAFTS_KEY)||'{}')||{}}
+  catch(_e){return {}}
+}
+
+function currentManualDraft(){
+  return {
+    symbol:$('manualSymbol')?.value||'',option:$('manualOption')?.value||'',
+    strike:$('manualStrike')?.value||'',buy:$('manualBuy')?.value||'',
+    sell:$('manualSell')?.value||'',notes:$('manualNotes')?.value||'',
+    editIndex:manualEditIndex
+  };
+}
+
+function saveManualDraft(){
+  if(!activeManualWeekKey || !$('manualTradeForm')) return;
+  try{
+    const drafts=readManualDrafts();
+    drafts[activeManualWeekKey]=currentManualDraft();
+    localStorage.setItem(MANUAL_DRAFTS_KEY,JSON.stringify(drafts));
+  }catch(_e){}
+}
+
+function restoreManualDraft(){
+  const d=readManualDrafts()[activeManualWeekKey];
+  if(!d) return;
+  $('manualSymbol').value=d.symbol||'';$('manualOption').value=d.option||'';
+  $('manualStrike').value=d.strike||'';$('manualBuy').value=d.buy||'';
+  $('manualSell').value=d.sell||'';$('manualNotes').value=d.notes||'';
+  if(Number.isInteger(d.editIndex) && manualTrades[d.editIndex]){
+    manualEditIndex=d.editIndex;
+    $('manualSubmit').textContent='حفظ التعديل';
+    $('manualCancelEdit').hidden=false;
+  }
+}
+
+function clearManualDraft(){
+  try{
+    const drafts=readManualDrafts();
+    delete drafts[activeManualWeekKey];
+    localStorage.setItem(MANUAL_DRAFTS_KEY,JSON.stringify(drafts));
+  }catch(_e){}
+}
+
+function setManualPageOpen(value){
+  try{localStorage.setItem(MANUAL_PAGE_OPEN_KEY,value?'1':'0')}catch(_e){}
 }
 
 function saveActiveManualWeek(){
@@ -1094,12 +1144,16 @@ function openManualEntry(){
   renderManualTrades();
   $('manualEntryPage').hidden=false;
   document.body.style.overflow='hidden';
+  restoreManualDraft();
+  setManualPageOpen(true);
 }
 
 function closeManualEntry(){
+  saveManualDraft();
   saveActiveManualWeek();
   $('manualEntryPage').hidden=true;
   document.body.style.overflow='';
+  setManualPageOpen(false);
 }
 
 function applyManualTrades(closePage=true){
@@ -1117,6 +1171,7 @@ function resetManualEditor(){
   $('manualTradeForm').reset();
   $('manualSubmit').textContent='إضافة الصفقة';
   $('manualCancelEdit').hidden=true;
+  clearManualDraft();
 }
 
 function startManualEdit(index){
@@ -1132,6 +1187,7 @@ function startManualEdit(index){
   $('manualSubmit').textContent='حفظ التعديل';
   $('manualCancelEdit').hidden=false;
   $('manualTradeForm').scrollIntoView({behavior:'smooth',block:'start'});
+  saveManualDraft();
 }
 
 $('excelFile').addEventListener('change',e=>{const f=e.target.files[0];if(f) handleFile(f)});
@@ -1164,6 +1220,8 @@ $('manualTradesBody').addEventListener('click',e=>{
   renderManualTrades();
 });
 $('manualCancelEdit').addEventListener('click',resetManualEditor);
+$('manualTradeForm').addEventListener('input',saveManualDraft);
+$('manualTradeForm').addEventListener('change',saveManualDraft);
 $('manualApply').addEventListener('click',()=>applyManualTrades(true));
 $('manualPdf').addEventListener('click',()=>{if(applyManualTrades(true)) exportPdf()});
 $('manualImage').addEventListener('click',()=>{if(applyManualTrades(true)) openTopTradesPreview()});
@@ -1187,7 +1245,7 @@ function handleSelectedWeekChange(){
 }
 $('fromDate').addEventListener('change',handleSelectedWeekChange);
 $('toDate').addEventListener('change',handleSelectedWeekChange);
-window.addEventListener('beforeunload',saveActiveManualWeek);
+window.addEventListener('beforeunload',()=>{saveManualDraft();saveActiveManualWeek()});
 
 if(!restoreSelectedRange()){
   setCurrentWeekRange();
@@ -1204,6 +1262,7 @@ if(manualTrades.length){
 updateFooterClock();
 setInterval(updateFooterClock,60000);
 render();
+try{if(localStorage.getItem(MANUAL_PAGE_OPEN_KEY)==='1') openManualEntry()}catch(_e){}
 
 // Q OPTIONS FINAL READY — live preview + iOS save
 console.log('Q OPTIONS BUILD v7.1 LIVE PREVIEW');
