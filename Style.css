@@ -3772,3 +3772,27 @@ body{
 .manual-delete{border-color:#bb5148!important;background:#fff1ef!important;color:#a42f29!important}
 .manual-cancel-edit{grid-column:1/-1;border:1px solid #b9a98c;border-radius:14px;background:#fff;color:#68563d;padding:12px;font-weight:800;cursor:pointer}
 .manual-cancel-edit[hidden]{display:none!important}
+
+/* أزرار الإدخال اليدوي — كريمي وذهبي هادئ ثلاثي الأبعاد */
+.manual-add,.manual-report-actions button{
+  position:relative!important;
+  overflow:hidden!important;
+  color:#563b16!important;
+  border:1px solid #d6b56f!important;
+  background:linear-gradient(155deg,#fffefa 0%,#fff5df 56%,#ead19c 100%)!important;
+  box-shadow:0 7px 0 #b7812d,0 14px 24px rgba(126,84,24,.17),inset 0 2px 0 rgba(255,255,255,.98)!important;
+  text-shadow:0 1px 0 #fff!important;
+  transform:translateY(-2px)!important;
+  transition:transform .14s ease,box-shadow .14s ease,filter .14s ease!important;
+}
+.manual-add::before,.manual-report-actions button::before{
+  content:"";position:absolute;inset:1px 8% auto;height:43%;border-radius:14px 14px 55% 55%;
+  background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,255,255,0));pointer-events:none
+}
+.manual-add:active,.manual-report-actions button:active{
+  transform:translateY(5px)!important;
+  box-shadow:0 2px 0 #b7812d,0 7px 13px rgba(126,84,24,.14),inset 0 2px 0 #fff!important;
+}
+.manual-add{background:linear-gradient(155deg,#fffdf6 0%,#f8e7bd 52%,#d9ad59 100%)!important;border-color:#c99234!important;font-size:20px!important}
+.manual-report-actions button:nth-child(2){background:linear-gradient(155deg,#fff 0%,#f8f2e8 58%,#ded1bd 100%)!important;border-color:#c8b99f!important;color:#534536!important;box-shadow:0 7px 0 #a9977a,0 14px 24px rgba(87,71,48,.14),inset 0 2px 0 #fff!important}
+.manual-report-actions button:nth-child(3){background:linear-gradient(155deg,#fffefa 0%,#f7ead0 55%,#ddbf83 100%)!important}
