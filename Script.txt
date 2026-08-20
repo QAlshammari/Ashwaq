@@ -1,7 +1,31 @@
 let trades = [];
 let equityChart, dailyChart, winLossChart;
+let importedWorkbookActive = false;
 
 const $ = id => document.getElementById(id);
+const REPORT_WIDTH = 1120;
+const SAVED_RANGE_KEY = 'qOptionsSelectedReportRange';
+
+function saveSelectedRange(){
+  try{
+    localStorage.setItem(SAVED_RANGE_KEY,JSON.stringify({
+      from:$('fromDate')?.value || '',
+      to:$('toDate')?.value || ''
+    }));
+  }catch(_e){}
+}
+
+function restoreSelectedRange(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(SAVED_RANGE_KEY)||'null');
+    if(saved?.from && saved?.to){
+      $('fromDate').value=saved.from;
+      $('toDate').value=saved.to;
+      return true;
+    }
+  }catch(_e){}
+  return false;
+}
 const money = n => (n < 0 ? '-$' : '$') + Math.abs(Number(n) || 0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const moneyInt = n => (n < 0 ? '-$' : '$') + Math.abs(Math.round(Number(n) || 0)).toLocaleString('en-US');
 const pct = n => `${Number(n) >= 0 ? '+' : ''}${(Number(n) || 0).toFixed(2)}%`;
@@ -32,6 +56,7 @@ function addDays(iso,days){
   return toISO(date);
 }
 
+// البيانات التجريبية من Q-Options-FINAL41(2) فقط — بدون أي تعديل.
 function buildDemoTrades(){
   const {from} = currentWeekRange();
   return [
@@ -134,14 +159,9 @@ function normalizeRows(rows){
     const buy = num(pick(['buy','buy price','entry','entry price','سعر الشراء','سعر الدخول','الدخول'],3));
     const sellRaw = pick(['sell','sell price','exit','exit price','سعر البيع','سعر الخروج','الخروج'],4);
     const sell = sellRaw === '' || sellRaw === null || sellRaw === undefined ? null : num(sellRaw);
-    const profitRaw = pick(['profit','p/l','pnl','net profit','الربح','الربح والخسارة','صافي الربح','ربح','الخسارة'],5);
-    const profit = profitRaw === '' || profitRaw === null || profitRaw === undefined
-      ? ((sell !== null ? sell-buy : 0)*100)
-      : num(profitRaw);
-    const pctRaw = pick(['pct','percent','percentage','profit %','return %','النسبة','النسبة %','نسبة الربح','نسبة العائد'],6);
-    const p = pctRaw === '' || pctRaw === null || pctRaw === undefined
-      ? (buy ? ((sell ?? buy)-buy)/buy*100 : 0)
-      : num(pctRaw);
+    // الحساب دائماً من سعري الشراء والبيع حتى لا تتعارض صيغ Excel مع التقرير.
+    const profit = sell === null ? 0 : (sell-buy)*100;
+    const p = sell === null || !buy ? 0 : (sell-buy)/buy*100;
     const notes = pick(['notes','note','remarks','الملاحظات','ملاحظات','ملاحظة'],7) || '';
 
     return {date,symbol:String(symbol).trim(),option,strike:String(strike).trim(),buy,sell,profit,pct:p,notes:String(notes).trim()};
@@ -154,23 +174,39 @@ function colorize(el,value){
 }
 
 function getFilteredTrades(){
+  // بعد رفع Excel نعرض جميع صفوف الملف فوراً؛ التاريخ المختار يبقى عنواناً للتقرير.
+  if(importedWorkbookActive) return [...trades];
   const from = $('fromDate').value;
   const to = $('toDate').value;
   return trades.filter(t => (!from || !t.date || t.date >= from) && (!to || !t.date || t.date <= to));
 }
 
+function tradeOutcome(trade){
+  if(trade.sell===null || trade.sell===undefined || trade.sell==='') return 'open';
+  const buy=Number(trade.buy)||0;
+  const sell=Number(trade.sell)||0;
+  if(sell>buy) return 'win';
+  if(sell>0 && sell<buy) return 'stopped';
+  if(sell===0 && buy>0) return 'loss';
+  return 'flat';
+}
+
 function calculateStats(data){
-  const closed = data.filter(t => t.sell !== null || t.profit !== 0);
-  const wins = closed.filter(t => t.profit > 0);
-  const losses = closed.filter(t => t.profit < 0);
+  // مطابق تماماً لطريقة كود 41 للنسخة التجريبية.
+  const closed = data.filter(t => tradeOutcome(t) !== 'open');
+  const wins = closed.filter(t => tradeOutcome(t) === 'win');
+  const stopped = closed.filter(t => tradeOutcome(t) === 'stopped');
+  const losses = closed.filter(t => tradeOutcome(t) === 'loss');
+  const counted = closed.filter(t => ['win','loss','stopped'].includes(tradeOutcome(t)));
+  const negativeTrades = [...losses,...stopped];
   const grossWin = wins.reduce((s,t)=>s+t.profit,0);
-  const grossLoss = losses.reduce((s,t)=>s+t.profit,0);
+  const grossLoss = negativeTrades.reduce((s,t)=>s+t.profit,0);
   const net = closed.reduce((s,t)=>s+t.profit,0);
   const totalCost = closed.reduce((s,t)=>s+(Math.abs(t.buy)*100),0);
   const returnP = totalCost ? net/totalCost*100 : 0;
-  const winRate = closed.length ? wins.length/closed.length*100 : 0;
+  const winRate = counted.length ? wins.length/counted.length*100 : 0;
   const avgWin = wins.length ? grossWin/wins.length : 0;
-  const avgLoss = losses.length ? grossLoss/losses.length : 0;
+  const avgLoss = negativeTrades.length ? grossLoss/negativeTrades.length : 0;
   const pf = grossLoss ? grossWin/Math.abs(grossLoss) : (grossWin ? Infinity : 0);
   const expectancy = closed.length ? net/closed.length : 0;
 
@@ -190,7 +226,7 @@ function calculateStats(data){
   const worstDay=dayVals.length ? Math.min(...dayVals) : 0;
   const best=[...closed].sort((a,b)=>b.profit-a.profit)[0] || null;
 
-  return {closed,wins,losses,grossWin,grossLoss,net,totalCost,returnP,winRate,avgWin,avgLoss,pf,expectancy,maxDD,sharpe,ordered,byDay,bestDay,worstDay,best};
+  return {closed,counted,wins,stopped,losses,grossWin,grossLoss,net,totalCost,returnP,winRate,avgWin,avgLoss,pf,expectancy,maxDD,sharpe,ordered,byDay,bestDay,worstDay,best};
 }
 
 function render(){
@@ -222,7 +258,7 @@ function render(){
   $('worstDay').textContent=money(s.worstDay); colorize($('worstDay'),s.worstDay);
 
   renderTable(filtered);
-  renderCharts(s.ordered,s.byDay,s.wins.length,s.losses.length);
+  renderCharts(s.ordered,s.byDay,s.wins.length,s.losses.length,s.stopped.length);
   $('equityFinal').textContent=money(s.net);
   $('rowsCount').textContent=`${filtered.length} صفقة`;
 }
@@ -250,9 +286,34 @@ function chartDefaults(){
   Chart.defaults.color='#6f604f';
   Chart.defaults.font.family='Cairo';
   Chart.defaults.borderColor='rgba(163,137,99,.20)';
+  if(!Chart.registry.plugins.get('qOptionsDepth')){
+    Chart.register({
+      id:'qOptionsDepth',
+      beforeDatasetDraw(chart){
+        const ctx=chart.ctx;
+        ctx.save();
+        ctx.shadowColor='rgba(116,72,13,.32)';
+        ctx.shadowBlur=14;
+        ctx.shadowOffsetX=0;
+        ctx.shadowOffsetY=8;
+      },
+      afterDatasetDraw(chart){chart.ctx.restore()}
+    });
+  }
 }
 
-function renderCharts(ordered,byDay,winCount,lossCount){
+function chartGradient(context,top,bottom){
+  const {chart}=context;
+  const area=chart.chartArea;
+  if(!area) return top;
+  const g=chart.ctx.createLinearGradient(0,area.top,0,area.bottom);
+  g.addColorStop(0,top);
+  g.addColorStop(.48,bottom);
+  g.addColorStop(1,'rgba(255,255,255,.08)');
+  return g;
+}
+
+function renderCharts(ordered,byDay,winCount,lossCount,stoppedCount=0){
   if(!window.Chart) return;
   chartDefaults();
   const eqLabels=[],eqData=[];let cum=0;
@@ -262,18 +323,18 @@ function renderCharts(ordered,byDay,winCount,lossCount){
   equityChart?.destroy();dailyChart?.destroy();winLossChart?.destroy();
   equityChart=new Chart($('equityChart'),{
     type:'line',
-    data:{labels:eqLabels,datasets:[{data:eqData,borderColor:'#b88a3b',backgroundColor:'rgba(184,138,59,.14)',fill:true,tension:.28,pointRadius:2,borderWidth:2}]},
+    data:{labels:eqLabels,datasets:[{data:eqData,borderColor:'#b57a18',backgroundColor:c=>chartGradient(c,'rgba(247,211,126,.72)','rgba(184,122,26,.20)'),fill:true,tension:.34,pointRadius:4,pointHoverRadius:7,pointBackgroundColor:'#fff4c9',pointBorderColor:'#b57a18',pointBorderWidth:3,borderWidth:4}]},
     options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{x:{ticks:{maxRotation:0,autoSkip:true}},y:{ticks:{callback:v=>'$'+v}}}}
   });
   dailyChart=new Chart($('dailyChart'),{
     type:'bar',
-    data:{labels:days,datasets:[{data:vals,backgroundColor:vals.map(v=>v>=0?'#4d9664':'#c45b52'),borderWidth:0,borderRadius:5}]},
+    data:{labels:days,datasets:[{data:vals,backgroundColor:c=>chartGradient(c,c.raw>=0?'#86d6a0':'#ff9b90',c.raw>=0?'#25844b':'#b9312c'),borderColor:vals.map(v=>v>=0?'#247443':'#a92e28'),borderWidth:2,borderRadius:10,borderSkipped:false,barPercentage:.68}]},
     options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'$'+v}}}}
   });
   winLossChart=new Chart($('winLossChart'),{
     type:'doughnut',
-    data:{labels:['أرباح','خسائر'],datasets:[{data:[winCount,lossCount],backgroundColor:['#4d9664','#c45b52'],borderWidth:0}]},
-    options:{responsive:true,maintainAspectRatio:false,animation:false,cutout:'58%',plugins:{legend:{position:'right',rtl:true,labels:{boxWidth:13}}}}
+    data:{labels:['رابحة','خاسرة','موقوفة'],datasets:[{data:[winCount,lossCount,stoppedCount],backgroundColor:c=>chartGradient(c,c.dataIndex===0?'#9ee3af':c.dataIndex===1?'#ffaaa0':'#9fe9f2',c.dataIndex===0?'#27854b':c.dataIndex===1?'#b92e2a':'#159ab1'),borderColor:['#fff5d7','#fff0e8','#e8fbff'],borderWidth:4,hoverOffset:10,spacing:3}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,cutout:'58%',rotation:-105,circumference:360,plugins:{legend:{position:'right',rtl:true,labels:{boxWidth:15,padding:18,font:{weight:'800'}}}}}
   });
 }
 
@@ -289,7 +350,7 @@ async function handleFile(file){
       const buf=await file.arrayBuffer();
       const wb=XLSX.read(buf,{type:'array',cellDates:false});
 
-      // نجرب جميع الأوراق حتى نجد ورقة تحتوي على صفقات صالحة.
+      // نفس قارئ الإكسل المستقر: نستخدم أول ورقة تحتوي على بيانات صفقات.
       for(const sheetName of wb.SheetNames){
         const ws=wb.Sheets[sheetName];
         const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true});
@@ -303,9 +364,17 @@ async function handleFile(file){
       return;
     }
 
-    trades=normalized;
-    setRangeFromTrades();
+    trades=[...normalized];
+    importedWorkbookActive=true;
+    // لا نسمح لملف Excel بتغيير التاريخ الذي اختاره المستخدم.
+    saveSelectedRange();
+    // تحديث فوري ثم تحديث مؤكد بعد إغلاق منتقي الملفات في Safari/iPhone.
     render();
+    document.body.offsetHeight;
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    render();
+    setTimeout(render,80);
+    setTimeout(render,260);
     showToast(`تم تحميل ${trades.length} صفقة بنجاح`);
   }catch(err){
     console.error(err);
@@ -388,6 +457,24 @@ function chartImage(chart){
   try{return chart?.toBase64Image('image/png',1) || ''}catch{return ''}
 }
 
+// ينتظر تحميل الشعار وأي صور داخل قالب التصدير قبل تشغيل html2canvas.
+// كانت هذه الدالة مستدعاة في الحفظ وPDF لكنها غير موجودة، فيتوقف الزر فورًا.
+async function waitForImages(container){
+  if(!container) return;
+  const images=[...container.querySelectorAll('img')];
+  const jobs=images.map(img=>new Promise(resolve=>{
+    if(img.complete && img.naturalWidth>0){resolve();return}
+    const done=()=>resolve();
+    img.addEventListener('load',done,{once:true});
+    img.addEventListener('error',done,{once:true});
+    setTimeout(done,8000);
+  }));
+  if(document.fonts?.ready){
+    jobs.push(Promise.race([document.fonts.ready,new Promise(r=>setTimeout(r,3000))]));
+  }
+  await Promise.all(jobs);
+}
+
 
 function tradeOptionLabel(trade){
   const explicit=String(trade.option||'').toUpperCase();
@@ -399,9 +486,12 @@ function tradeOptionLabel(trade){
 }
 
 function tradeStatusMeta(trade){
-  if(trade.sell===null && trade.profit===0) return {cls:'open',labelAr:'مفتوحة',labelEn:'OPEN',icon:'◐'};
-  if(trade.profit < 0) return {cls:'loss',labelAr:'خاسرة',labelEn:'LOSS',icon:'✕'};
-  return {cls:'win',labelAr:'رابح',labelEn:'WIN',icon:'✓'};
+  const outcome=tradeOutcome(trade);
+  if(outcome==='stopped') return {cls:'stopped',labelAr:'موقوفة'};
+  if(outcome==='loss') return {cls:'loss',labelAr:'خسارة'};
+  if(outcome==='open') return {cls:'open',labelAr:'مفتوحة'};
+  if(outcome==='flat') return {cls:'flat',labelAr:'متعادل'};
+  return {cls:'win',labelAr:'ربح'};
 }
 
 function buildPdfTemplate(){
@@ -412,24 +502,63 @@ function buildPdfTemplate(){
 function buildShareTemplate(maxRows=10, captureId="shareCapture"){
   const filtered=getFilteredTrades();
   const s=calculateStats(filtered);
-  const rowsData=topTrades(filtered,maxRows);
+  // ترتيب التقرير: الرابحة أولاً، ثم الموقوفة، ثم الخاسرة.
+  const outcomeOrder={win:0,stopped:1,loss:2};
+  const rowsData=[...s.counted].sort((a,b)=>
+    (outcomeOrder[tradeOutcome(a)]??9)-(outcomeOrder[tradeOutcome(b)]??9) ||
+    (a.date||'').localeCompare(b.date||'') ||
+    String(a.symbol).localeCompare(String(b.symbol))
+  );
   const periodText=`${$('fromDate').value || '—'}  →  ${$('toDate').value || '—'}`;
-  const winPct = s.closed.length ? (s.wins.length / s.closed.length * 100) : 0;
-  const neutralCount = Math.max(0, filtered.length - s.wins.length - s.losses.length);
+  const winPct = s.counted.length ? (s.wins.length / s.counted.length * 100) : 0;
+  const stoppedCount = s.stopped.length;
+  const lossPct = s.counted.length ? (s.losses.length / s.counted.length * 100) : 0;
+  const stoppedPct = s.counted.length ? (stoppedCount / s.counted.length * 100) : 0;
+  const distributionPct=n=>s.counted.length?(n/s.counted.length*100):0;
+  const chartTrades=rowsData.slice(0,20);
+  const denseCharts=chartTrades.length>12;
+  const equityTrades=rowsData
+    .filter(t=>tradeOutcome(t)==='win')
+    .sort((a,b)=>a.profit-b.profit || String(a.symbol).localeCompare(String(b.symbol)))
+    .slice(0,20);
+  const denseEquity=equityTrades.length>12;
+  const maxTrade=Math.max(1,...chartTrades.map(t=>Math.abs(t.profit)));
+  const tradeBars=chartTrades.map((t,i)=>{
+    const x=18+i*(304/Math.max(1,chartTrades.length));
+    const h=Math.max(4,Math.abs(t.profit)/maxTrade*55);
+    const y=t.profit>=0?72-h:72;
+    const state=tradeOutcome(t);
+    const color=state==='win'?`url(#barWin-${captureId})`:state==='stopped'?`url(#barStopped-${captureId})`:`url(#barLoss-${captureId})`;
+    const slot=304/Math.max(1,chartTrades.length);
+    const w=Math.min(24,Math.max(7,slot*.58));
+    const barX=x+(slot-w)/2;
+    const cx=barX+w/2;
+    const capY=t.profit>=0?y:y+h;
+    return `<g class="cylinder-bar">
+      <rect x="${barX.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="${Math.min(7,w/2).toFixed(1)}" fill="${color}" stroke="${state==='win'?'#237b43':state==='stopped'?'#14859a':'#a92f29'}" stroke-width="1.2"/>
+      <rect x="${(barX+w*.16).toFixed(1)}" y="${(y+2).toFixed(1)}" width="${(w*.20).toFixed(1)}" height="${Math.max(0,h-4).toFixed(1)}" rx="1.5" fill="rgba(255,255,255,.34)"/>
+      <text class="bar-symbol" x="${cx.toFixed(1)}" y="146" text-anchor="start" transform="rotate(-90 ${cx.toFixed(1)} 146)">${escapeHtml(t.symbol).slice(0,5)}</text>
+    </g>`;
+  }).join('');
+  let running=0;
+  const equityValues=equityTrades.map(t=>(running+=t.profit));
+  const eqMin=Math.min(0,...equityValues),eqMax=Math.max(1,...equityValues),eqRange=Math.max(1,eqMax-eqMin);
+  const equityPoints=equityValues.map((v,i)=>`${(16+i*(292/Math.max(1,equityValues.length-1))).toFixed(1)},${(122-(v-eqMin)/eqRange*94).toFixed(1)}`).join(' ');
   const rows = rowsData.length ? rowsData.map(t=>{
     const option=tradeOptionLabel(t);
     const st=tradeStatusMeta(t);
-    const statusAr = st.cls==='loss' ? 'خاسرة' : st.cls==='open' ? 'مفتوحة' : 'رابح';
+    const statusAr = st.labelAr;
+    const optionAr = option==='CALL' ? 'Call 📈' : 'Put 📉';
     return `
       <tr>
         <td class="symbol-cell"><div class="symbol-stack"><span>${escapeHtml(t.symbol)}</span></div></td>
-        <td><span class="info-chip ${option==='CALL'?'call':'put'}">${option}</span></td>
+        <td dir="ltr"><span class="info-chip ${option==='CALL'?'call':'put'}" style="display:inline;background:transparent;border:0;border-radius:0;box-shadow:none;padding:0;font-size:27px;font-weight:900;color:${option==='CALL'?'#278c43':'#dc3f36'}">${optionAr}</span></td>
         <td>${escapeHtml(t.strike)}</td>
         <td dir="ltr">${money(t.buy)}</td>
         <td dir="ltr">${t.sell===null?'—':money(t.sell)}</td>
-        <td class="info-profit ${t.profit>=0?'pos':'neg'}">${t.sell===null&&t.profit===0?'—':money(t.profit)}</td>
-        <td class="info-pct ${t.pct>=0?'pos':'neg'}">${t.sell===null&&t.profit===0?'—':pct(t.pct)}</td>
-        <td><span class="info-status ${st.cls}">${statusAr}</span></td>
+        <td class="info-profit ${st.cls==='stopped'?'stopped-value':(t.profit>=0?'pos':'neg')}">${t.sell===null&&t.profit===0?'—':money(t.profit)}</td>
+        <td class="info-pct ${st.cls==='stopped'?'stopped-value':(t.pct>=0?'pos':'neg')}">${t.sell===null&&t.profit===0?'—':pct(t.pct)}</td>
+        <td><span class="info-status ${st.cls}" style="display:inline;background:transparent;border:0;border-radius:0;box-shadow:none;padding:0;font-size:27px;font-weight:900">${statusAr}</span></td>
       </tr>`;
   }).join('') : `<tr><td colspan="8">لا توجد صفقات ضمن الفترة المحددة</td></tr>`;
 
@@ -442,91 +571,112 @@ function buildShareTemplate(maxRows=10, captureId="shareCapture"){
         <div class="info-logo-wrap wide"><img src="${logoSrc()}" class="info-logo bigger" alt="Q Options"></div>
       </div>
 
-      <div class="info-dates-under-logo">
-        <div class="period-item solo"><span class="period-badge">📅</span><div><div class="digital smallish">${periodText}</div><div class="period-meta">فترة التداول  Trading Period</div></div></div>
-      </div>
-
       <div class="info-stats refined-order">
-        <div class="info-stat totalprofit">
-          <div class="info-stat-top"><span class="info-icon cash">$</span><div class="info-label"><b>إجمالي الأرباح</b><small>TOTAL PROFIT</small></div></div>
-          <div class="digital money bigmoney">${moneyInt(s.net)}</div>
-        </div>
-        <div class="info-stat">
-          <div class="info-stat-top"><span class="info-icon loss">✕</span><div class="info-label"><b>الصفقات الخاسرة</b><small>LOSING TRADES</small></div></div>
+        <div class="info-stat loss-stat">
+          <div class="info-stat-top"><span class="info-icon loss">−</span><div class="info-label"><b>الصفقات الخاسرة</b></div></div>
           <div class="digital red">${s.losses.length}</div>
         </div>
-        <div class="info-stat">
-          <div class="info-stat-top"><span class="info-icon win">✓</span><div class="info-label"><b>الصفقات الرابحة</b><small>WINNING TRADES</small></div></div>
+        <div class="info-stat stopped-stat">
+          <div class="info-stat-top"><span class="info-icon stopped">Ⅱ</span><div class="info-label"><b>الصفقات الموقوفة</b></div></div>
+          <div class="digital cyan">${stoppedCount}</div>
+        </div>
+        <div class="info-stat win-stat">
+          <div class="info-stat-top"><span class="info-icon win">✓</span><div class="info-label"><b>الصفقات الرابحة</b></div></div>
           <div class="digital green">${s.wins.length}</div>
         </div>
-        <div class="info-stat featured">
-          <div class="info-stat-top"><div class="info-label"><b>إجمالي العائد</b><small>TOTAL RETURN</small></div></div>
-          <div class="digital green">${pct(s.returnP)}</div>
+        <div class="info-stat total-trades-stat">
+          <div class="info-stat-top"><span class="info-icon layers">≡</span><div class="info-label"><b>إجمالي الصفقات</b></div></div>
+          <div class="digital number">${s.counted.length}</div>
         </div>
-        <div class="info-stat">
-          <div class="info-stat-top"><span class="info-icon layers">▤</span><div class="info-label"><b>إجمالي الصفقات</b><small>TOTAL TRADES</small></div></div>
-          <div class="digital number">${filtered.length}</div>
+        <div class="info-stat totalprofit">
+          <div class="info-stat-top"><span class="info-icon cash">$</span><div class="info-label"><b>إجمالي الأرباح</b></div></div>
+          <div class="digital money bigmoney">${moneyInt(s.net)}</div>
         </div>
       </div>
 
-      <div class="infographic-table-panel">
-        <div class="info-table-head centered"><h3>أهم الصفقات</h3></div>
+      <div class="info-bottom">
+        <div class="info-box distribution-box">
+          <h4>توزيع نتائج الصفقات</h4>
+          <div class="distribution-layout">
+            <div class="distribution-donut-wrap">
+              <svg class="distribution-donut" viewBox="0 0 140 140" aria-label="توزيع نتائج الصفقات">
+                <circle class="distribution-depth" cx="70" cy="74" r="50" pathLength="100"/>
+                <circle class="distribution-track" cx="70" cy="70" r="50" pathLength="100"/>
+                <circle class="distribution-segment win" cx="70" cy="70" r="50" pathLength="100" stroke-dasharray="${distributionPct(s.wins.length).toFixed(2)} ${(100-distributionPct(s.wins.length)).toFixed(2)}" stroke-dashoffset="0"/>
+                <circle class="distribution-segment stopped" cx="70" cy="70" r="50" pathLength="100" stroke-dasharray="${distributionPct(stoppedCount).toFixed(2)} ${(100-distributionPct(stoppedCount)).toFixed(2)}" stroke-dashoffset="-${distributionPct(s.wins.length).toFixed(2)}"/>
+                <circle class="distribution-segment loss" cx="70" cy="70" r="50" pathLength="100" stroke-dasharray="${distributionPct(s.losses.length).toFixed(2)} ${(100-distributionPct(s.losses.length)).toFixed(2)}" stroke-dashoffset="-${(distributionPct(s.wins.length)+distributionPct(stoppedCount)).toFixed(2)}"/>
+              </svg>
+              <div class="distribution-total"><b>${s.counted.length}</b><span>إجمالي</span></div>
+            </div>
+            <div class="distribution-legend">
+              <div class="legend-row win"><i></i><span>رابحة</span><b>${s.wins.length} — ${winPct.toFixed(1).replace('.0','')}%</b></div>
+              <div class="legend-row stopped"><i></i><span>موقوفة</span><b>${stoppedCount} — ${stoppedPct.toFixed(1).replace('.0','')}%</b></div>
+              <div class="legend-row loss"><i></i><span>خاسرة</span><b>${s.losses.length} — ${lossPct.toFixed(1).replace('.0','')}%</b></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-box">
+          <h4>العائد من كل صفقة</h4>
+          <svg class="report-mini-chart cylinder-chart ${denseCharts?'dense-chart':''}" viewBox="0 0 330 150" role="img" aria-label="العائد من كل صفقة">
+            <defs>
+              <linearGradient id="barWin-${captureId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#78ce91"/><stop offset=".5" stop-color="#31a65a"/><stop offset="1" stop-color="#247947"/></linearGradient>
+              <linearGradient id="barStopped-${captureId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8ce0ea"/><stop offset=".55" stop-color="#26adc2"/><stop offset="1" stop-color="#168298"/></linearGradient>
+              <linearGradient id="barLoss-${captureId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffaaa2"/><stop offset=".52" stop-color="#e65348"/><stop offset="1" stop-color="#ad302b"/></linearGradient>
+            </defs>
+            <g class="chart-grid"><line x1="12" y1="22" x2="320" y2="22"/><line x1="12" y1="47" x2="320" y2="47"/><line x1="12" y1="72" x2="320" y2="72"/><line x1="12" y1="97" x2="320" y2="97"/><line x1="12" y1="122" x2="320" y2="122"/></g>
+            <line class="chart-zero" x1="12" y1="72" x2="320" y2="72"/>
+            ${tradeBars}
+          </svg>
+        </div>
+
+        <div class="info-box">
+          <h4 class="equity-title">منحنى الأداء التراكمي</h4>
+          <svg class="report-mini-chart equity-chart ${denseEquity?'dense-chart':''}" viewBox="0 0 330 150" role="img" aria-label="منحنى الأداء التراكمي للصفقات الرابحة">
+            <defs><linearGradient id="equityFill-${captureId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d69b31" stop-opacity=".20"/><stop offset="1" stop-color="#d69b31" stop-opacity=".015"/></linearGradient></defs>
+            <g class="chart-grid"><line x1="12" y1="28" x2="320" y2="28"/><line x1="12" y1="52" x2="320" y2="52"/><line x1="12" y1="76" x2="320" y2="76"/><line x1="12" y1="100" x2="320" y2="100"/><line x1="12" y1="123" x2="320" y2="123"/></g>
+            <line class="chart-zero" x1="12" y1="123" x2="320" y2="123"/>
+            <polygon points="16,123 ${equityPoints} 308,123" fill="url(#equityFill-${captureId})"/>
+            <polyline points="${equityPoints}" fill="none" stroke="#a96f18" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+            ${equityValues.map((v,i)=>{
+              const px=16+i*(292/Math.max(1,equityValues.length-1));
+              const py=122-(v-eqMin)/eqRange*94;
+              const trade=equityTrades[i];
+              const labelX=px+(i%2===0?-7:10);
+              const labelY=py+(i%2===0?-7:11);
+              const label=trade?.profit>0 ? `<text class="equity-symbol" x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="start" transform="rotate(-90 ${labelX.toFixed(1)} ${labelY.toFixed(1)})">${escapeHtml(trade?.symbol||'').slice(0,5)}</text>` : '';
+              return `<g class="equity-point"><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="#fff4cf" stroke="#9c6414" stroke-width="3"/>${label}</g>`;
+            }).join('')}
+          </svg>
+        </div>
+      </div>
+
+      <div class="infographic-table-panel ${rowsData.length>12?'many-trades':''}">
+        <div class="info-table-head table-title-row">
+          <div class="table-title-boxes unified-table-boxes">
+            <h3 class="table-head-box all-trades-box">جميع الصفقات</h3>
+            <div class="best-trade-badge table-head-box">
+              <span class="best-cup">🏆</span>
+              <span class="best-copy"><small>أفضل صفقة</small><b>${s.best ? `${escapeHtml(s.best.symbol)} ${moneyInt(s.best.profit)}` : '—'}</b></span>
+            </div>
+          </div>
+          <div class="table-week-date table-head-box"><span class="week-date-icon">📅</span><span>${periodText}</span></div>
+        </div>
         <table class="info-table roomy">
           <thead>
             <tr>
-              <th>الرمز<br><small>SYMBOL</small></th>
-              <th>الخيار<br><small>OPTION</small></th>
-              <th>الضربة<br><small>STRIKE</small></th>
-              <th>سعر الشراء<br><small>BUY</small></th>
-              <th>سعر البيع<br><small>SELL</small></th>
-              <th>الربح<br><small>PROFIT $</small></th>
-              <th>الربح %<br><small>PROFIT %</small></th>
-              <th>الحالة<br><small>STATUS</small></th>
+              <th>الرمز</th>
+              <th>الخيار</th>
+              <th>الاسترايك</th>
+              <th>سعر الشراء</th>
+              <th>سعر البيع</th>
+              <th>الربح</th>
+              <th>النسبة</th>
+              <th>الحالة</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
-      </div>
-
-      <div class="info-bottom">
-        <div class="info-box">
-          <h4>إجمالي العائد<small>TOTAL RETURN</small></h4>
-          <div class="return-ring-wrap">
-            <div class="return-ring">
-              <div class="return-ring-arrow">↗</div>
-              <div class="return-ring-content">
-                <div class="digital">${pct(s.returnP)}</div>
-                <div class="ar">إجمالي العائد</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="info-box">
-          <h4>إحصائيات سريعة<small>QUICK STATISTICS</small></h4>
-          <div class="quick-list">
-            <div class="quick-row"><span class="name"><span class="mini blue">≣</span> إجمالي الصفقات</span><span class="value">${filtered.length}</span></div>
-            <div class="quick-row"><span class="name"><span class="mini green">✓</span> الصفقات الرابحة</span><span class="value green">${s.wins.length}</span></div>
-            <div class="quick-row"><span class="name"><span class="mini red">✕</span> الصفقات الخاسرة</span><span class="value red">${s.losses.length}</span></div>
-            <div class="quick-row"><span class="name"><span class="mini gray">◐</span> المحايدة</span><span class="value">${neutralCount}</span></div>
-            <div class="quick-row"><span class="name"><span class="mini gold">$</span> إجمالي الأرباح</span><span class="value green">${moneyInt(s.net)}</span></div>
-          </div>
-        </div>
-
-        <div class="info-box">
-          <h4>توزيع نتائج الصفقات<small>TRADE DISTRIBUTION</small></h4>
-          <div class="donut-layout">
-            <div style="position:relative;width:170px;height:170px;display:grid;place-items:center">
-              <div class="donut-chart" style="--pct:${winPct.toFixed(2)}"></div>
-              <div class="donut-core"><b>${winPct.toFixed(0)}%</b><span>رابح</span></div>
-            </div>
-            <div class="donut-legend">
-              <div class="legend-row"><span style="display:flex;align-items:center;gap:8px"><span class="legend-dot green"></span> رابحة</span><b>${s.wins.length}</b></div>
-              <div class="legend-row"><span style="display:flex;align-items:center;gap:8px"><span class="legend-dot red"></span> خاسرة</span><b>${s.losses.length}</b></div>
-              <div class="legend-row"><span style="display:flex;align-items:center;gap:8px"><span class="legend-dot gray"></span> محايدة</span><b>${neutralCount}</b></div>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div class="info-contact footer-only">للتواصل عبر تليجرام <b dir="ltr">@Qalshammari</b></div>
@@ -543,26 +693,73 @@ function isIOSDevice(){
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
-function openNativePdfPrint(){
-  showToast('فتح نافذة PDF / الطباعة…');
-  setTimeout(()=>window.print(),180);
+function clearNativeReportPrint(){
+  document.body.classList.remove('print-top-trades-report');
+  const stage=$('exportStage');
+  if(stage) stage.innerHTML='';
+  setExportBusy(false);
+}
+
+async function openNativePdfPrint(){
+  const stage=$('exportStage');
+  if(!stage) return;
+  setExportBusy(true);
+  showToast('جاري تجهيز صفحة أهم الصفقات PDF…');
+  stage.innerHTML=buildShareTemplate(10,'nativePdfCapture');
+  const target=$('nativePdfCapture');
+  target?.classList.add('capture-mode');
+  await waitForImages(target);
+  // نحول التقرير إلى صورة واحدة بنفس أبعاده قبل الطباعة؛ هذا يمنع قص الجهة
+  // اليسرى في Safari ويحافظ على نسبة التصميم كاملة داخل صفحة PDF.
+  if(window.html2canvas && target){
+    try{
+      const canvas=await html2canvas(target,{
+        scale:1.35,useCORS:true,allowTaint:false,
+        backgroundColor:'#ffffff',logging:false,imageTimeout:8000
+      });
+      const reportImage=new Image();
+      reportImage.id='nativePdfImage';
+      reportImage.alt='Q Options report';
+      reportImage.src=canvas.toDataURL('image/png');
+      stage.innerHTML='';
+      stage.appendChild(reportImage);
+      await new Promise(resolve=>{
+        if(reportImage.complete) return resolve();
+        reportImage.onload=resolve;
+        reportImage.onerror=resolve;
+      });
+    }catch(err){console.warn('Native PDF image fallback',err)}
+  }
+  document.body.classList.add('print-top-trades-report');
+
+  const cleanup=()=>{
+    window.removeEventListener('afterprint',cleanup);
+    clearNativeReportPrint();
+  };
+  window.addEventListener('afterprint',cleanup,{once:true});
+  setTimeout(()=>window.print(),260);
+  // احتياط لـ Safari إذا لم يرسل afterprint بعد إغلاق نافذة الطباعة.
+  setTimeout(()=>{
+    if(document.body.classList.contains('print-top-trades-report')) cleanup();
+  },120000);
 }
 
 async function exportPdf(){
   // على iPhone/iPad: نافذة الطباعة الأصلية أكثر ثباتاً، ومنها يمكن حفظ/مشاركة PDF.
   if(isIOSDevice()){
-    openNativePdfPrint();
+    await openNativePdfPrint();
     return;
   }
 
   // إذا لم تحمل مكتبات التصدير لأي سبب، لا يتعطل الزر: ننتقل مباشرة للطباعة.
   if(!window.html2canvas || !window.jspdf){
-    openNativePdfPrint();
+    await openNativePdfPrint();
     return;
   }
 
   setExportBusy(true);
   showToast('جاري تجهيز تقرير PDF…');
+  let nativeFallback=false;
   try{
     const stage=$('exportStage');
     stage.innerHTML=buildPdfTemplate();
@@ -578,30 +775,24 @@ async function exportPdf(){
       logging:false,
       imageTimeout:8000
     });
-    const imgData=canvas.toDataURL('image/jpeg',0.92);
+    const imgData=canvas.toDataURL('image/jpeg',0.94);
     const {jsPDF}=window.jspdf;
-    const pdf=new jsPDF({orientation:'landscape',unit:'mm',format:'a4',compress:true});
-    const pageW=pdf.internal.pageSize.getWidth();
-    const pageH=pdf.internal.pageSize.getHeight();
-    const margin=7;
-    const contentW=pageW-margin*2;
-    const renderedH=canvas.height*contentW/canvas.width;
-    let offset=0;
-
-    while(offset<renderedH){
-      if(offset>0) pdf.addPage('a4','landscape');
-      pdf.addImage(imgData,'JPEG',margin,margin-offset,contentW,renderedH,undefined,'FAST');
-      offset+=pageH-margin*2;
-    }
+    const pageW=210;
+    const pageH=pageW*canvas.height/canvas.width;
+    const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:[pageW,pageH],compress:true});
+    pdf.addImage(imgData,'JPEG',0,0,pageW,pageH,undefined,'FAST');
 
     pdf.save(`Q-Options-Weekly-Report-${safeFileRange()}.pdf`);
     showToast('تم تجهيز تقرير PDF');
   }catch(err){
     console.error(err);
-    openNativePdfPrint();
+    nativeFallback=true;
+    await openNativePdfPrint();
   }finally{
-    $('exportStage').innerHTML='';
-    setExportBusy(false);
+    if(!nativeFallback){
+      $('exportStage').innerHTML='';
+      setExportBusy(false);
+    }
   }
 }
 
@@ -614,12 +805,14 @@ function fitLivePreview(){
   const card=$('liveShareCapture');
   if(!content || !viewport || !scaleBox || !card) return;
 
-  const available=Math.max(280, content.clientWidth || 320);
-  const cardWidth=card.offsetWidth || 1240;
-  const cardHeight=card.offsetHeight || 1740;
-  const scale=Math.min(1, available/cardWidth);
+  const available=Math.max(280, content.getBoundingClientRect().width || 320);
+  const cardWidth=REPORT_WIDTH;
+  const cardHeight=Math.ceil(Math.max(card.scrollHeight,card.offsetHeight,card.getBoundingClientRect().height));
+  const scale=Math.min(1, available/REPORT_WIDTH);
 
   scaleBox.style.transform=`translateX(-50%) scale(${scale})`;
+  scaleBox.style.width=`${REPORT_WIDTH}px`;
+  scaleBox.style.height=`${cardHeight}px`;
   viewport.style.height=`${Math.ceil(cardHeight*scale)}px`;
 }
 
@@ -630,6 +823,7 @@ function showLivePreview(){
 
   topTradesExportState={dataUrl:'',blob:null,filename:''};
   content.innerHTML=`<div class="preview-live-viewport" id="previewLiveViewport"><div class="preview-live-scale" id="previewLiveScale">${buildShareTemplate(10,'liveShareCapture')}</div></div>`;
+  $('liveShareCapture')?.classList.add('capture-mode');
   modal.hidden=false;
   document.body.classList.add('preview-open');
 
@@ -705,57 +899,127 @@ async function shareOrDownloadBlob(blob,dataUrl,filename,iosWindow=null){
 async function saveOrShareTopTrades(e){
   e?.preventDefault?.();
   if(!window.html2canvas){showToast('مكتبة حفظ الصورة لم يتم تحميلها');return}
-
-  // فتح نافذة iOS فور ضغطة المستخدم، قبل أي await، حتى لا يمنع Safari الحفظ لاحقاً.
-  const iosWindow=isIOSDevice()?window.open('', '_blank'):null;
-  if(iosWindow){
-    iosWindow.document.write('<!doctype html><html lang="ar" dir="rtl"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>جاري تجهيز الصورة</title></head><body style="font-family:Arial;text-align:center;padding:50px;background:#fffaf2;color:#4b3418"><h2>جاري تجهيز صورة أهم الصفقات…</h2><p>انتظري لحظات.</p></body></html>');
-    iosWindow.document.close();
-  }
+  // لا نفتح نافذة انتظار على الآيفون؛ يتم الحفظ من المعاينة نفسها.
+  const iosWindow=null;
 
   const btn=$('previewDownload');
-  const oldText=btn?.textContent || 'حفظ / مشاركة الصورة';
+  const oldText=btn?.textContent || 'حفظ الصورة';
   if(btn){btn.disabled=true;btn.textContent='جاري تجهيز الصورة…'}
   showToast('جاري تجهيز الصورة عالية الدقة…');
 
   try{
     const stage=$('exportStage');
+    // نلتقط نسخة مستقلة بالحجم الأصلي، وليس المعاينة المصغّرة داخل الجوال.
+    // التقاط liveShareCapture كان يرث transform من المعاينة ويضغط التقرير في الزاوية.
     stage.innerHTML=buildShareTemplate(10,'shareCapture');
     const target=$('shareCapture');
-    await waitForImages(target);
-    await new Promise(r=>setTimeout(r,180));
+    if(!target) throw new Error('لم يتم العثور على صفحة الصفقات');
 
-    const scale=isIOSDevice()?1:1.55;
+    // Safari كان يحسب عرض التقرير بعرض شاشة الهاتف رغم أن لوحة الحفظ أكبر.
+    // نثبت العرض على العنصر نفسه قبل أن يأخذ html2canvas القياسات.
+    stage.style.setProperty('width',`${REPORT_WIDTH}px`,'important');
+    stage.style.setProperty('min-width',`${REPORT_WIDTH}px`,'important');
+    stage.style.setProperty('max-width',`${REPORT_WIDTH}px`,'important');
+    stage.style.setProperty('display','block','important');
+    stage.style.setProperty('position','fixed','important');
+    stage.style.setProperty('left','0','important');
+    stage.style.setProperty('top','0','important');
+    target.style.setProperty('width',`${REPORT_WIDTH}px`,'important');
+    target.style.setProperty('min-width',`${REPORT_WIDTH}px`,'important');
+    target.style.setProperty('max-width',`${REPORT_WIDTH}px`,'important');
+    target.style.setProperty('display','block','important');
+    target.style.setProperty('position','relative','important');
+    target.style.setProperty('margin','0','important');
+    target.style.setProperty('box-sizing','border-box','important');
+    target.style.setProperty('flex','none','important');
+    target.style.setProperty('transform','none','important');
+    target.style.setProperty('zoom','1','important');
+    target.classList.add('capture-mode');
+    await Promise.race([waitForImages(target),new Promise(r=>setTimeout(r,1200))]);
+    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+
+    const measuredWidth=Math.round(target.getBoundingClientRect().width);
+    if(measuredWidth<REPORT_WIDTH-20){
+      throw new Error(`عرض التقرير غير صحيح قبل الحفظ: ${measuredWidth}px`);
+    }
+
+    const captureWidth=REPORT_WIDTH;
+    const captureHeight=Math.ceil(Math.max(target.scrollHeight,target.getBoundingClientRect().height));
+    // دقة أعلى للصورة النهائية مع حد آمن لذاكرة Safari على الآيفون.
+    const scale=2;
     const canvas=await html2canvas(target,{
       scale,
+      width:captureWidth,
+      height:captureHeight,
       useCORS:true,
       allowTaint:false,
       backgroundColor:'#fffefa',
       logging:false,
-      imageTimeout:15000,
-      width:target.scrollWidth || 1120,
-      height:target.scrollHeight || 1570,
-      windowWidth:target.scrollWidth || 1120,
+      imageTimeout:1200,
+      windowWidth:captureWidth,
+      windowHeight:captureHeight,
       scrollX:0,
-      scrollY:0
+      scrollY:0,
+      onclone:clonedDocument=>{
+        clonedDocument.documentElement.style.setProperty('width',`${REPORT_WIDTH}px`,'important');
+        clonedDocument.documentElement.style.setProperty('min-width',`${REPORT_WIDTH}px`,'important');
+        clonedDocument.body.style.setProperty('width',`${REPORT_WIDTH}px`,'important');
+        clonedDocument.body.style.setProperty('min-width',`${REPORT_WIDTH}px`,'important');
+        clonedDocument.body.style.setProperty('margin','0','important');
+        const clonedStage=clonedDocument.getElementById('exportStage');
+        const clonedTarget=clonedDocument.getElementById('shareCapture');
+        if(clonedStage){
+          clonedStage.style.setProperty('left','0','important');
+          clonedStage.style.setProperty('width',`${REPORT_WIDTH}px`,'important');
+          clonedStage.style.setProperty('min-width',`${REPORT_WIDTH}px`,'important');
+          clonedStage.style.setProperty('max-width',`${REPORT_WIDTH}px`,'important');
+          clonedStage.style.setProperty('transform','none','important');
+        }
+        if(clonedTarget){
+          clonedTarget.classList.add('capture-mode');
+          clonedTarget.style.setProperty('width',`${REPORT_WIDTH}px`,'important');
+          clonedTarget.style.setProperty('min-width',`${REPORT_WIDTH}px`,'important');
+          clonedTarget.style.setProperty('max-width',`${REPORT_WIDTH}px`,'important');
+          clonedTarget.style.setProperty('display','block','important');
+          clonedTarget.style.setProperty('position','relative','important');
+          clonedTarget.style.setProperty('margin','0','important');
+          clonedTarget.style.setProperty('box-sizing','border-box','important');
+          clonedTarget.style.setProperty('flex','none','important');
+          clonedTarget.style.setProperty('transform','none','important');
+          clonedTarget.style.setProperty('zoom','1','important');
+        }
+      }
     });
 
-    const dataUrl=canvas.toDataURL('image/png',0.98);
-    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png',0.98));
+    if(!canvas.width || !canvas.height) throw new Error('تعذر إنشاء مساحة الصورة');
+    const dataUrl=canvas.toDataURL('image/png');
+    let blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
     if(!dataUrl) throw new Error('PNG generation failed');
-
-    const filename=`Q-Options-Top-Trades-${safeFileRange()}.png`;
+    if(!blob){
+      const binary=atob(dataUrl.split(',')[1]);
+      const bytes=new Uint8Array(binary.length);
+      for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+      blob=new Blob([bytes],{type:'image/png'});
+    }
+    const filename=`Q-Options-صفحة-الصفقات-${safeFileRange()}.png`;
     topTradesExportState={dataUrl,blob,filename};
-    await shareOrDownloadBlob(blob,dataUrl,filename,iosWindow);
-    showToast('تم تجهيز الصورة');
+
+    // نعرض النسخة النهائية داخل المعاينة أولاً؛ وهذا يضمن وجود طريقة
+    // للحفظ بالضغط المطوّل حتى إذا منع Safari التنزيل أو المشاركة.
+    const previewContent=$('previewContent');
+    if(previewContent){
+      previewContent.innerHTML=`<div class="saved-image-wrap"><div class="saved-image-hint">اضغط مطولًا على الصورة ثم اختر «حفظ في الصور» إذا لم تظهر نافذة المشاركة</div><img class="saved-trades-image" src="${dataUrl}" alt="صفحة الصفقات"></div>`;
+    }
+    if(!blob) throw new Error('تعذر إنشاء ملف الصورة');
+    if(isIOSDevice()){
+      showToast('تم تجهيز الصورة — اضغط عليها مطولًا للحفظ');
+    }else{
+      await shareOrDownloadBlob(blob,dataUrl,filename,iosWindow);
+      showToast('تم حفظ الصورة');
+    }
   }catch(err){
     console.error(err);
-    if(iosWindow && !iosWindow.closed){
-      iosWindow.document.open();
-      iosWindow.document.write('<!doctype html><html lang="ar" dir="rtl"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:Arial;text-align:center;padding:40px"><h2>تعذر حفظ الصورة</h2><p>ارجعي للصفحة وحاولي مرة أخرى.</p></body></html>');
-      iosWindow.document.close();
-    }
-    showToast('تعذر حفظ الصورة');
+    showToast('تعذر الحفظ التلقائي — جرّب الضغط مطولًا على المعاينة');
   }finally{
     $('exportStage').innerHTML='';
     if(btn){btn.disabled=false;btn.textContent=oldText}
@@ -773,17 +1037,20 @@ function showToast(message){
 }
 
 $('excelFile').addEventListener('change',e=>{const f=e.target.files[0];if(f) handleFile(f)});
-$('demoBtn').addEventListener('click',()=>{setCurrentWeekRange();trades=buildDemoTrades();render();showToast('تم تحميل بيانات تجريبية للأسبوع الحالي')});
+$('demoBtn').addEventListener('click',()=>{importedWorkbookActive=false;setCurrentWeekRange();trades=buildDemoTrades();render();showToast('تم تحميل بيانات تجريبية للأسبوع الحالي')});
 $('pdfBtn').addEventListener('click',exportPdf);
 $('imageBtn').addEventListener('click',openTopTradesPreview);
 $('previewClose')?.addEventListener('click',hidePreview);
 $('previewDownload')?.addEventListener('click',saveOrShareTopTrades);
 $('previewModal')?.addEventListener('click',e=>{ if(e.target.id==='previewModal') hidePreview(); });
 window.addEventListener('resize',()=>{if(!$('previewModal')?.hidden) fitLivePreview()});
-$('fromDate').addEventListener('change',render);
-$('toDate').addEventListener('change',render);
+$('fromDate').addEventListener('change',()=>{saveSelectedRange();render()});
+$('toDate').addEventListener('change',()=>{saveSelectedRange();render()});
 
-setCurrentWeekRange();
+if(!restoreSelectedRange()){
+  setCurrentWeekRange();
+  saveSelectedRange();
+}
 trades=buildDemoTrades();
 updateFooterClock();
 setInterval(updateFooterClock,60000);
