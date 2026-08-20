@@ -206,7 +206,8 @@
           <label class="manual-field"><span>سعر الخروج</span><input id="manualSell" type="number" inputmode="decimal" step="any" min="0" placeholder="سعر الخروج" required></label>
         </div>
         <label class="manual-field manual-wide"><span>ملاحظات</span><input id="manualNotes" type="text" placeholder="ملاحظة قصيرة" autocomplete="off"></label>
-        <button class="manual-add" type="submit">إضافة الصفقة</button>
+        <button id="manualSubmit" class="manual-add" type="submit">إضافة الصفقة</button>
+        <button id="manualCancelEdit" class="manual-cancel-edit" type="button" hidden>إلغاء التعديل</button>
       </form>
 
       <section class="manual-list-card">
