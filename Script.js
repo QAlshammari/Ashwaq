@@ -3,10 +3,41 @@ let equityChart, dailyChart, winLossChart;
 let importedWorkbookActive = false;
 let manualTrades = [];
 let manualEditIndex = -1;
+let activeManualWeekKey = '';
 
 const $ = id => document.getElementById(id);
 const REPORT_WIDTH = 1120;
 const SAVED_RANGE_KEY = 'qOptionsSelectedReportRange';
+const MANUAL_WEEKS_KEY = 'qOptionsManualTradesByWeekV1';
+
+function selectedWeekKey(){
+  const from=$('fromDate')?.value || currentWeekRange().from;
+  const to=$('toDate')?.value || currentWeekRange().to;
+  return `${from}__${to}`;
+}
+
+function readManualWeeks(){
+  try{return JSON.parse(localStorage.getItem(MANUAL_WEEKS_KEY)||'{}')||{}}
+  catch(_e){return {}}
+}
+
+function saveActiveManualWeek(){
+  if(!activeManualWeekKey) return;
+  try{
+    const weeks=readManualWeeks();
+    weeks[activeManualWeekKey]=manualTrades;
+    localStorage.setItem(MANUAL_WEEKS_KEY,JSON.stringify(weeks));
+  }catch(_e){}
+}
+
+function loadSelectedManualWeek(){
+  saveActiveManualWeek();
+  activeManualWeekKey=selectedWeekKey();
+  const saved=readManualWeeks()[activeManualWeekKey];
+  manualTrades=Array.isArray(saved)?saved:[];
+  manualEditIndex=-1;
+  return manualTrades;
+}
 
 function saveSelectedRange(){
   try{
@@ -1058,6 +1089,7 @@ function renderManualTrades(){
 }
 
 function openManualEntry(){
+  loadSelectedManualWeek();
   updateManualWeekRange();
   renderManualTrades();
   $('manualEntryPage').hidden=false;
@@ -1065,6 +1097,7 @@ function openManualEntry(){
 }
 
 function closeManualEntry(){
+  saveActiveManualWeek();
   $('manualEntryPage').hidden=true;
   document.body.style.overflow='';
 }
@@ -1112,6 +1145,7 @@ $('manualTradeForm').addEventListener('submit',e=>{
   const wasEditing=manualEditIndex>=0;
   if(wasEditing) manualTrades[manualEditIndex]=updatedTrade;
   else manualTrades.push(updatedTrade);
+  saveActiveManualWeek();
   resetManualEditor();
   renderManualTrades();
   $('manualSymbol').focus();
@@ -1126,6 +1160,7 @@ $('manualTradesBody').addEventListener('click',e=>{
   manualTrades.splice(index,1);
   if(manualEditIndex===index) resetManualEditor();
   else if(manualEditIndex>index) manualEditIndex--;
+  saveActiveManualWeek();
   renderManualTrades();
 });
 $('manualCancelEdit').addEventListener('click',resetManualEditor);
@@ -1138,14 +1173,34 @@ $('previewClose')?.addEventListener('click',hidePreview);
 $('previewDownload')?.addEventListener('click',saveOrShareTopTrades);
 $('previewModal')?.addEventListener('click',e=>{ if(e.target.id==='previewModal') hidePreview(); });
 window.addEventListener('resize',()=>{if(!$('previewModal')?.hidden) fitLivePreview()});
-$('fromDate').addEventListener('change',()=>{saveSelectedRange();render()});
-$('toDate').addEventListener('change',()=>{saveSelectedRange();render()});
+function handleSelectedWeekChange(){
+  saveSelectedRange();
+  loadSelectedManualWeek();
+  if(manualTrades.length){
+    importedWorkbookActive=true;
+    trades=manualTrades.map(t=>({...t}));
+  }else{
+    importedWorkbookActive=false;
+    trades=[];
+  }
+  render();
+}
+$('fromDate').addEventListener('change',handleSelectedWeekChange);
+$('toDate').addEventListener('change',handleSelectedWeekChange);
+window.addEventListener('beforeunload',saveActiveManualWeek);
 
 if(!restoreSelectedRange()){
   setCurrentWeekRange();
   saveSelectedRange();
 }
-trades=buildDemoTrades();
+activeManualWeekKey=selectedWeekKey();
+manualTrades=readManualWeeks()[activeManualWeekKey]||[];
+if(manualTrades.length){
+  importedWorkbookActive=true;
+  trades=manualTrades.map(t=>({...t}));
+}else{
+  trades=buildDemoTrades();
+}
 updateFooterClock();
 setInterval(updateFooterClock,60000);
 render();
