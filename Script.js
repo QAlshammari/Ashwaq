@@ -135,15 +135,13 @@ function storedTradesForSelectedRange(){
     Object.entries(store).forEach(([key,list])=>{
       const range=parseStoredRangeKey(key);
       if(!range || !Array.isArray(list)) return;
-      // يشمل كل أسبوع أو نطاق محفوظ يتقاطع مع الأسبوع/الشهر المحدد.
+      // نطاق الحفظ هو المرجع الأساسي. هذا مهم لصفقات Excel لأن تاريخ الخلية
+      // قد يكون فارغاً أو مكتوباً بتنسيق مختلف، ومع ذلك تبقى الصفقة مرتبطة
+      // بالأسبوع الذي اختاره المستخدم وقت الرفع.
       if(range.to>=selectedFrom && range.from<=selectedTo) collected.push(...list);
     });
   });
-  return mergeTradesWithoutDuplicates([],collected).filter(trade=>{
-    // الصفقات المؤرخة تُفلتر بدقة داخل الشهر، وغير المؤرخة تبقى ضمن نطاق حفظها.
-    const date=parseDate(trade?.date);
-    return !date || (date>=selectedFrom && date<=selectedTo);
-  });
+  return mergeTradesWithoutDuplicates([],collected);
 }
 
 function loadSelectedManualWeek(){
