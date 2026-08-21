@@ -915,7 +915,7 @@ function buildShareTemplate(maxRows=10, captureId="shareCapture"){
         </div>
       </div>
 
-      <div class="info-bottom">
+      <div class="info-bottom" style="display:none!important">
         <div class="info-box distribution-box">
           <h4>توزيع نتائج الصفقات</h4>
           <div class="distribution-layout">
