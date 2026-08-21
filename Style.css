@@ -3832,10 +3832,63 @@ body{
   .manual-report-actions button{min-height:44px!important;padding:8px 4px!important;font-size:11px!important;border-radius:11px!important;white-space:normal!important}
 }
 
-/* تكبير تاريخ الفترة في التقرير وفي الصورة المحفوظة */
+/* تاريخ التقرير واضح وكبير في العرض والصورة المحفوظة */
 .refined-light .table-week-date,
 .capture-mode .table-week-date{
   font-size:20px!important;
   font-weight:900!important;
   letter-spacing:.2px!important;
 }
+
+/* توحيد مستوى العنوان والرقم داخل صناديق الإحصائيات الخمسة */
+.refined-light .info-stats.refined-order .info-stat,
+.capture-mode .info-stats.refined-order .info-stat{
+  display:grid!important;
+  grid-template-rows:34px 34px!important;
+  align-content:center!important;
+  justify-items:center!important;
+  row-gap:5px!important;
+}
+.refined-light .info-stats.refined-order .info-stat .info-stat-top,
+.capture-mode .info-stats.refined-order .info-stat .info-stat-top{
+  width:100%!important;
+  height:34px!important;
+  min-height:34px!important;
+  margin:0!important;
+  align-items:center!important;
+  justify-content:center!important;
+  transform:none!important;
+}
+.refined-light .info-stats.refined-order .info-stat .digital,
+.capture-mode .info-stats.refined-order .info-stat .digital,
+.refined-light .info-stats.refined-order .info-stat.totalprofit .digital.money,
+.capture-mode .info-stats.refined-order .info-stat.totalprofit .digital.money{
+  height:34px!important;
+  min-height:34px!important;
+  margin:0!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  transform:none!important;
+  line-height:1!important;
+}
+
+/* نتائج الصفقات داخل جدول الإدخال اليدوي */
+.manual-result{direction:ltr;font-weight:900;white-space:nowrap}
+.manual-result.win,.manual-status.win{color:#238247!important}
+.manual-result.stopped,.manual-status.stopped{color:#138da4!important}
+.manual-result.loss,.manual-status.loss{color:#c43c35!important}
+.manual-status{display:inline-block;font-weight:900;white-space:nowrap}
+
+/* زر تنزيل Excel أسفل صفحة الإدخال اليدوي */
+.manual-excel-save{
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  width:min(100%,720px);min-height:54px;margin:0 auto 28px;padding:11px 16px;
+  border:1px solid #6da77d;border-radius:15px;color:#205f36;font-family:inherit;
+  font-size:15px;font-weight:900;cursor:pointer;
+  background:linear-gradient(155deg,#fbfffc 0%,#e6f5e9 55%,#b9dfc2 100%);
+  box-shadow:0 6px 0 #4d9361,0 13px 22px rgba(45,117,65,.16),inset 0 2px 0 #fff;
+}
+.manual-excel-save span{font-size:21px;line-height:1}
+.manual-excel-save:active{transform:translateY(5px);box-shadow:0 1px 0 #4d9361,0 6px 11px rgba(45,117,65,.13),inset 0 2px 0 #fff}
+@media(max-width:620px){.manual-excel-save{min-height:48px;font-size:13px;margin-bottom:22px}}
