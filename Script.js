@@ -205,33 +205,6 @@ function mergeTradesWithoutDuplicates(existing,incoming){
   return merged;
 }
 
-// هوية الصفقة التي لا تتغير عند تعديل نتيجة الصفقة. لا نضع سعر البيع أو
-// الربح هنا حتى يحل آخر تعديل محل النسخة القديمة بدلاً من إنشاء صفقة جديدة.
-function tradeEditIdentity(trade){
-  return [
-    parseDate(trade?.date)||'',
-    String(trade?.symbol||'').trim().toUpperCase(),
-    String(trade?.option||'').trim().toUpperCase(),
-    String(trade?.strike||'').trim(),
-    Number(trade?.buy)||0
-  ].join('|');
-}
-
-function mergeTradesKeepingLatest(existing,incoming){
-  const result=[];
-  const positions=new Map();
-  [...(Array.isArray(existing)?existing:[]),...(Array.isArray(incoming)?incoming:[])].forEach(trade=>{
-    const key=tradeEditIdentity(trade);
-    if(positions.has(key)){
-      result[positions.get(key)]={...trade};
-    }else{
-      positions.set(key,result.length);
-      result.push({...trade});
-    }
-  });
-  return result;
-}
-
 function canonicalTradingWeekKey(dateValue){
   const iso=parseDate(dateValue);
   if(!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
@@ -283,9 +256,8 @@ function saveImportedTradesToSelectedWeek(importedTrades){
   const selectedFrom=$('fromDate')?.value || currentWeekRange().from;
   const selectedTo=$('toDate')?.value || currentWeekRange().to;
 
-  // ملف Excel المرفوع هو النسخة الأحدث للفترة المختارة، وليس دفعة إضافية.
-  // ننظف أولاً أي صفوف Excel قديمة تخص هذه الفترة حتى لو حُفظت سابقاً
-  // تحت مفتاح نطاق مختلف، ثم نخزن محتوى الملف الجديد مرة واحدة.
+  // استبدال كامل: امسح كل صفقات Excel القديمة التابعة للأسبوع المحدد
+  // من جميع مفاتيح التخزين القديمة، ثم اعتمد الملف الجديد وحده.
   Object.keys(ranges).forEach(key=>{
     const list=Array.isArray(ranges[key])?ranges[key]:[];
     const kept=list.filter(trade=>{
@@ -293,14 +265,15 @@ function saveImportedTradesToSelectedWeek(importedTrades){
       if(/^\d{4}-\d{2}-\d{2}$/.test(tradeDate)){
         return tradeDate<selectedFrom || tradeDate>selectedTo;
       }
+      // الصفوف القديمة بلا تاريخ تُحذف إذا كانت محفوظة تحت نفس الأسبوع.
       return key!==rangeKey;
     });
     if(kept.length) ranges[key]=kept;
     else delete ranges[key];
   });
 
-  // إذا احتوى الملف نفسه على النسخة القديمة والمعدلة، نعتمد آخر صف فقط.
-  ranges[rangeKey]=mergeTradesKeepingLatest([],importedTrades);
+  // لا دمج مع النسخة القديمة إطلاقاً؛ الملف الحالي هو النسخة النهائية للأسبوع.
+  ranges[rangeKey]=mergeTradesWithoutDuplicates([],importedTrades);
   writeExcelRanges(ranges);
   return ranges[rangeKey];
 }
@@ -343,9 +316,7 @@ function storedTradesForSelectedRange(){
       });
     });
   });
-  // ترتيب المصادر هو اليدوي ثم Excel؛ عند وجود هوية واحدة في المصدرين
-  // تكون نسخة Excel الأحدث هي الظاهرة في التقرير والإحصائيات.
-  return mergeTradesKeepingLatest([],collected);
+  return mergeTradesWithoutDuplicates([],collected);
 }
 
 function loadSelectedManualWeek(){
@@ -711,8 +682,8 @@ async function handleFile(file){
       return;
     }
 
-    // ملف Excel الجديد يستبدل نسخة Excel السابقة للفترة المختارة، بينما
-    // تبقى الصفقات اليدوية والفترات الأخرى محفوظة كما هي.
+    // رفع Excel لنفس الأسبوع يستبدل جميع صفقات Excel السابقة لذلك الأسبوع.
+    // الصفقات اليدوية والأسابيع الأخرى لا تتأثر.
     saveImportedTradesToSelectedWeek(normalized);
     trades=storedTradesForSelectedRange().map(t=>({...t}));
     importedWorkbookActive=true;
@@ -725,7 +696,7 @@ async function handleFile(file){
     render();
     setTimeout(render,80);
     setTimeout(render,260);
-    showToast(`تم حفظ ${normalized.length} صفقة في الأسبوع المحدد`);
+    showToast(`تم استبدال صفقات الأسبوع واعتماد ${normalized.length} صفقة من الملف الجديد`);
   }catch(err){
     console.error(err);
     showToast('تعذر قراءة الملف. استخدم XLSX أو CSV بالقالب المرفق');
@@ -1400,9 +1371,82 @@ function updateManualWeekRange(){
 
 function renderManualTrades(){
   const body=$('manualTradesBody');
-  body.innerHTML=manualTrades.map((t,i)=>`<tr><td>${escapeHtml(t.symbol)}</td><td>${escapeHtml(t.option)}</td><td>${escapeHtml(t.strike)}</td><td>${Number(t.buy).toFixed(2)}</td><td>${Number(t.sell).toFixed(2)}</td><td>${escapeHtml(displayTradeNote(t.notes))}</td><td><button type="button" class="manual-edit" data-index="${i}">تعديل</button><button type="button" class="manual-delete" data-index="${i}">حذف</button></td></tr>`).join('');
+  body.innerHTML=manualTrades.map((t,i)=>{
+    const status=tradeStatusMeta(t);
+    return `<tr><td>${escapeHtml(t.symbol)}</td><td>${escapeHtml(t.option)}</td><td>${escapeHtml(t.strike)}</td><td>${Number(t.buy).toFixed(2)}</td><td>${Number(t.sell).toFixed(2)}</td><td class="manual-result ${status.cls}">${money(t.profit)}</td><td class="manual-result ${status.cls}">${pct(t.pct)}</td><td><span class="manual-status ${status.cls}">${status.labelAr}</span></td><td>${escapeHtml(displayTradeNote(t.notes))}</td><td><button type="button" class="manual-edit" data-index="${i}">تعديل</button><button type="button" class="manual-delete" data-index="${i}">حذف</button></td></tr>`;
+  }).join('');
   $('manualCount').textContent=`${manualTrades.length} صفقة`;
   $('manualEmpty').hidden=manualTrades.length>0;
+}
+
+async function exportManualTradesToExcel(){
+  if(!manualTrades.length){showToast('لا توجد صفقات يدوية لتنزيلها');return}
+  if(!window.ExcelJS){showToast('تعذر تحميل منسق Excel');return}
+  try{
+    const workbook=new ExcelJS.Workbook();
+    workbook.creator='Q Options Tracker';
+    workbook.created=new Date();
+    const sheet=workbook.addWorksheet('الصفقات اليدوية',{views:[{rightToLeft:true,state:'frozen',ySplit:1}]});
+    sheet.columns=[
+      {header:'الشركة',key:'symbol',width:15},{header:'السترايك',key:'strike',width:13},
+      {header:'سعر الشراء',key:'buy',width:15},{header:'سعر البيع',key:'sell',width:15},
+      {header:'الخيار',key:'option',width:12},{header:'الربح',key:'profit',width:15},
+      {header:'النسبة',key:'pct',width:14},{header:'الحالة',key:'status',width:14},
+      {header:'التاريخ',key:'date',width:16},{header:'الملاحظات',key:'notes',width:25}
+    ];
+    manualTrades.forEach(t=>{
+      const status=tradeStatusMeta(t);
+      sheet.addRow({symbol:t.symbol,strike:Number(t.strike)||t.strike,buy:Number(t.buy),sell:Number(t.sell),option:t.option,profit:Number(t.profit),pct:Number(t.pct)/100,status:status.labelAr,date:t.date||'',notes:displayTradeNote(t.notes)});
+    });
+
+    const gold='FFD9AE55',deepGold='FF8B5A12',cream='FFFFF9ED',white='FFFFFFFF';
+    const thin={style:'thin',color:{argb:'FFD8BE87'}};
+    const header=sheet.getRow(1);
+    header.height=30;
+    header.eachCell(cell=>{
+      cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:gold}};
+      cell.font={name:'Arial',size:12,bold:true,color:{argb:'FF3E2912'}};
+      cell.alignment={horizontal:'center',vertical:'middle'};
+      cell.border={top:thin,left:thin,bottom:{style:'medium',color:{argb:deepGold}},right:thin};
+    });
+    for(let r=2;r<=manualTrades.length+1;r++){
+      const row=sheet.getRow(r);row.height=25;
+      row.eachCell({includeEmpty:true},cell=>{
+        cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:r%2===0?white:cream}};
+        cell.font={name:'Arial',size:11,bold:true,color:{argb:'FF30261B'}};
+        cell.alignment={horizontal:'center',vertical:'middle'};
+        cell.border={top:thin,left:thin,bottom:thin,right:thin};
+      });
+      row.getCell(3).numFmt='$0.00';row.getCell(4).numFmt='$0.00';row.getCell(6).numFmt='$0.00';row.getCell(7).numFmt='0.00%';
+      const state=tradeStatusMeta(manualTrades[r-2]);
+      const stateColor=state.cls==='win'?'FF238247':state.cls==='stopped'?'FF138DA4':'FFC43C35';
+      [row.getCell(6),row.getCell(7),row.getCell(8)].forEach(cell=>{cell.font={name:'Arial',size:11,bold:true,color:{argb:stateColor}}});
+    }
+    sheet.autoFilter={from:'A1',to:'J1'};
+    const weekRow=manualTrades.length+3;
+    sheet.mergeCells(`A${weekRow}:J${weekRow}`);
+    const weekFrom=$('fromDate').value || currentWeekRange().from;
+    const weekTo=$('toDate').value || currentWeekRange().to;
+    const weekCell=sheet.getCell(`A${weekRow}`);
+    weekCell.value=`تاريخ الأسبوع: ${weekFrom} → ${weekTo}`;
+    weekCell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF2D99D'}};
+    weekCell.font={name:'Arial',size:12,bold:true,color:{argb:'FF5E3C10'}};
+    weekCell.alignment={horizontal:'center',vertical:'middle'};
+    weekCell.border={top:{style:'medium',color:{argb:deepGold}},left:thin,bottom:{style:'medium',color:{argb:deepGold}},right:thin};
+    sheet.getRow(weekRow).height=28;
+
+    const buffer=await workbook.xlsx.writeBuffer();
+    const blob=new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');
+    link.href=url;link.download=`Q-Options-Manual-${safeFileRange()}.xlsx`;
+    document.body.appendChild(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+    showToast(`تم تنزيل ${manualTrades.length} صفقة في ملف Excel منسق`);
+  }catch(err){
+    console.error(err);
+    showToast('تعذر إنشاء ملف Excel');
+  }
 }
 
 function openManualEntry(){
@@ -1499,6 +1543,7 @@ $('manualTradeForm').addEventListener('change',saveManualDraft);
 $('manualApply').addEventListener('click',()=>applyManualTrades(true));
 $('manualPdf').addEventListener('click',()=>{if(applyManualTrades(true)) exportPdf()});
 $('manualImage').addEventListener('click',()=>{if(applyManualTrades(true)) openTopTradesPreview()});
+$('manualExcel').addEventListener('click',exportManualTradesToExcel);
 $('pdfBtn').addEventListener('click',exportPdf);
 $('imageBtn').addEventListener('click',openTopTradesPreview);
 $('previewClose')?.addEventListener('click',hidePreview);
