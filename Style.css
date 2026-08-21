@@ -148,6 +148,7 @@ button{-webkit-tap-highlight-color:transparent}
 .icon.gold{color:#fff;background:linear-gradient(145deg,#d2a556,#906525)}
 .icon.bronze{color:#fff;background:linear-gradient(145deg,#b78955,#785537)}
 .icon.green{color:#fff;background:linear-gradient(145deg,#69aa7c,#397c50)}
+.icon.cyan{color:#fff;background:linear-gradient(145deg,#6bc8d4,#27889a)}
 .icon.red{color:#fff;background:linear-gradient(145deg,#d8776f,#a4443e)}
 .stat-copy{text-align:center;min-width:0}.stat-copy span,.stat-copy small{display:block}.stat-copy span{font-size:12px;font-weight:700}.stat-copy small{margin-top:2px;font-size:9px;color:var(--muted);direction:ltr}.stat-copy strong{display:block;font-size:22px;line-height:1.4;direction:ltr;color:#36291f}.featured-stat{border-color:#cfb176;background:linear-gradient(155deg,#fffdf5,#f4e6c8)}
 
@@ -1465,6 +1466,7 @@ body{
   text-shadow:0 0 12px rgba(255,255,255,.88);
 }
 .stat-card .icon.green{box-shadow:0 6px 0 #287c47,0 0 22px rgba(51,176,97,.48),inset 0 2px 0 rgba(255,255,255,.55)!important}
+.stat-card .icon.cyan{box-shadow:0 6px 0 #176f80,0 0 22px rgba(42,169,190,.48),inset 0 2px 0 rgba(255,255,255,.55)!important}
 .stat-card .icon.red{box-shadow:0 6px 0 #9f312d,0 0 22px rgba(226,68,59,.48),inset 0 2px 0 rgba(255,255,255,.55)!important}
 .stat-card .icon.gold,.stat-card .icon.gold-soft{box-shadow:0 6px 0 #9b6a1e,0 0 24px rgba(227,170,57,.52),inset 0 2px 0 rgba(255,255,255,.62)!important}
 .stat-card .icon.bronze{box-shadow:0 6px 0 #795021,0 0 22px rgba(180,112,44,.45),inset 0 2px 0 rgba(255,255,255,.55)!important}
