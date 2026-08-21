@@ -548,6 +548,13 @@ function escapeHtml(value){
   return String(value ?? '').replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
 }
 
+function displayTradeNote(value){
+  const note=String(value ?? '').trim();
+  if(['ربح','رابحة','ناجحة'].includes(note)) return 'ناجحة';
+  if(['خسارة','خاسرة'].includes(note)) return 'خاسرة';
+  return note || '—';
+}
+
 function renderTable(data){
   const outcomeOrder={win:0,stopped:1,loss:2,open:3,flat:4};
   const orderedData=[...data].sort((a,b)=>
@@ -564,7 +571,7 @@ function renderTable(data){
       <td dir="ltr">${t.sell===null?'—':money(t.sell).replace('$','')}</td>
       <td class="${t.profit>0?'profit':t.profit<0?'loss':''}">${t.sell===null&&t.profit===0?'<span style="color:#b48630">مفتوحة</span>':money(t.profit)}</td>
       <td class="${t.pct>0?'profit':t.pct<0?'loss':''}">${t.sell===null&&t.profit===0?'—':pct(t.pct)}</td>
-      <td>${escapeHtml(t.notes || '—')}</td>
+      <td>${escapeHtml(displayTradeNote(t.notes))}</td>
     </tr>`).join('');
 }
 
@@ -781,7 +788,7 @@ function tradeStatusMeta(trade){
   if(outcome==='loss') return {cls:'loss',labelAr:'خاسرة'};
   if(outcome==='open') return {cls:'open',labelAr:'مفتوحة'};
   if(outcome==='flat') return {cls:'flat',labelAr:'متعادل'};
-  return {cls:'win',labelAr:'ربح'};
+  return {cls:'win',labelAr:'ناجحة'};
 }
 
 function buildPdfTemplate(){
@@ -1340,7 +1347,7 @@ function updateManualWeekRange(){
 
 function renderManualTrades(){
   const body=$('manualTradesBody');
-  body.innerHTML=manualTrades.map((t,i)=>`<tr><td>${escapeHtml(t.symbol)}</td><td>${escapeHtml(t.option)}</td><td>${escapeHtml(t.strike)}</td><td>${Number(t.buy).toFixed(2)}</td><td>${Number(t.sell).toFixed(2)}</td><td>${escapeHtml(t.notes||'—')}</td><td><button type="button" class="manual-edit" data-index="${i}">تعديل</button><button type="button" class="manual-delete" data-index="${i}">حذف</button></td></tr>`).join('');
+  body.innerHTML=manualTrades.map((t,i)=>`<tr><td>${escapeHtml(t.symbol)}</td><td>${escapeHtml(t.option)}</td><td>${escapeHtml(t.strike)}</td><td>${Number(t.buy).toFixed(2)}</td><td>${Number(t.sell).toFixed(2)}</td><td>${escapeHtml(displayTradeNote(t.notes))}</td><td><button type="button" class="manual-edit" data-index="${i}">تعديل</button><button type="button" class="manual-delete" data-index="${i}">حذف</button></td></tr>`).join('');
   $('manualCount').textContent=`${manualTrades.length} صفقة`;
   $('manualEmpty').hidden=manualTrades.length>0;
 }
