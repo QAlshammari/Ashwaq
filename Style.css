@@ -4330,3 +4330,19 @@ body{
   font-size:30px!important;
   line-height:1.2!important;
 }
+
+/* ===== WIDER REPORT CANVAS — keep the same bold typography ===== */
+.refined-light.infographic-card,
+.capture-mode.infographic-card{
+  width:1600px!important;
+  min-width:1600px!important;
+  max-width:1600px!important;
+}
+.preview-live-scale{
+  width:1600px!important;
+}
+.export-stage{
+  width:1600px!important;
+  min-width:1600px!important;
+  max-width:1600px!important;
+}
