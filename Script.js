@@ -12,6 +12,101 @@ const MANUAL_WEEKS_KEY = 'qOptionsManualTradesByWeekV1';
 const EXCEL_RANGES_KEY = 'qOptionsExcelTradesByRangeV1';
 const MANUAL_DRAFTS_KEY = 'qOptionsManualDraftsByWeekV1';
 const MANUAL_PAGE_OPEN_KEY = 'qOptionsManualPageOpenV1';
+const FIREBASE_CONFIG = {
+  apiKey:'AIzaSyBxX734w0Az7nww2TyfQ2TNwM6Sk0U8pcU',
+  authDomain:'q-options.firebaseapp.com',
+  projectId:'q-options',
+  storageBucket:'q-options.firebasestorage.app',
+  messagingSenderId:'924540887366',
+  appId:'1:924540887366:web:95ce2e8815a95f16e44547',
+  databaseURL:'https://q-options-default-rtdb.europe-west1.firebasedatabase.app'
+};
+const CLOUD_ROOT_PATH='qOptionsSharedV1';
+let cloudRootRef=null;
+let cloudReady=false;
+let applyingCloudState=false;
+let cloudSaveTimer=null;
+
+function writeManualWeeks(weeks,{sync=true}={}){
+  localStorage.setItem(MANUAL_WEEKS_KEY,JSON.stringify(weeks||{}));
+  if(sync) scheduleCloudSave();
+}
+
+function writeExcelRanges(ranges,{sync=true}={}){
+  localStorage.setItem(EXCEL_RANGES_KEY,JSON.stringify(ranges||{}));
+  if(sync) scheduleCloudSave();
+}
+
+function sharedCloudPayload(){
+  return {initialized:true,manualWeeks:readManualWeeks(),excelRanges:readExcelRanges(),updatedAt:Date.now()};
+}
+
+function scheduleCloudSave(){
+  if(!cloudReady || applyingCloudState || !cloudRootRef) return;
+  clearTimeout(cloudSaveTimer);
+  cloudSaveTimer=setTimeout(()=>{
+    cloudRootRef.set(sharedCloudPayload()).catch(err=>{
+      console.error('Firebase save failed',err);
+      showToast('تعذر مزامنة الصفقات؛ تحقق من الاتصال');
+    });
+  },120);
+}
+
+function mergeStoredRanges(first,second){
+  const result={};
+  [first,second].forEach(store=>{
+    Object.entries(store||{}).forEach(([key,list])=>{
+      if(!Array.isArray(list)) return;
+      result[key]=mergeTradesWithoutDuplicates(result[key]||[],list);
+    });
+  });
+  return result;
+}
+
+function applyCloudStores(data){
+  applyingCloudState=true;
+  writeManualWeeks(data?.manualWeeks||{},{sync:false});
+  writeExcelRanges(data?.excelRanges||{},{sync:false});
+  applyingCloudState=false;
+  activeManualWeekKey=selectedWeekKey();
+  manualTrades=readManualWeeks()[activeManualWeekKey]||[];
+  trades=storedTradesForSelectedRange().map(t=>({...t}));
+  importedWorkbookActive=trades.length>0;
+  renderManualTrades();
+  render();
+}
+
+async function initSharedCloud(){
+  try{
+    if(!window.firebase) throw new Error('Firebase SDK unavailable');
+    if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    cloudRootRef=firebase.database().ref(CLOUD_ROOT_PATH);
+    const firstSnapshot=await cloudRootRef.once('value');
+    const remote=firstSnapshot.val()||{};
+    // أول جهاز فقط ينقل التخزين المحلي القديم إلى السحابة. بعد تهيئة
+    // القاعدة تصبح السحابة هي المرجع، حتى لا يعيد جهاز قديم صفقات محذوفة.
+    const initialState=remote.initialized ? remote : {
+      initialized:true,
+      manualWeeks:mergeStoredRanges(remote.manualWeeks,readManualWeeks()),
+      excelRanges:mergeStoredRanges(remote.excelRanges,readExcelRanges()),
+      updatedAt:Date.now()
+    };
+    applyCloudStores(initialState);
+    if(!remote.initialized) await cloudRootRef.set(initialState);
+    cloudReady=true;
+    cloudRootRef.on('value',snapshot=>{
+      const data=snapshot.val();
+      if(data) applyCloudStores(data);
+    },err=>{
+      console.error('Firebase listen failed',err);
+      showToast('المزامنة السحابية غير متاحة');
+    });
+    showToast('تمت مزامنة الصفقات بين جميع الأجهزة');
+  }catch(err){
+    console.error('Firebase initialization failed',err);
+    showToast('تعذر الاتصال بقاعدة الصفقات المشتركة');
+  }
+}
 
 function selectedWeekKey(){
   const from=$('fromDate')?.value || currentWeekRange().from;
@@ -82,7 +177,7 @@ function saveActiveManualWeek(){
   try{
     const weeks=readManualWeeks();
     weeks[activeManualWeekKey]=manualTrades;
-    localStorage.setItem(MANUAL_WEEKS_KEY,JSON.stringify(weeks));
+    writeManualWeeks(weeks);
   }catch(_e){}
 }
 
@@ -110,12 +205,56 @@ function mergeTradesWithoutDuplicates(existing,incoming){
   return merged;
 }
 
+function canonicalTradingWeekKey(dateValue){
+  const iso=parseDate(dateValue);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+  const [y,m,d]=iso.split('-').map(Number);
+  const date=new Date(y,m-1,d,12,0,0);
+  const day=date.getDay();
+  const diffToMonday=day===0?-6:1-day;
+  const monday=new Date(date);
+  monday.setDate(date.getDate()+diffToMonday);
+  const friday=new Date(monday);
+  friday.setDate(monday.getDate()+4);
+  return `${toISO(monday)}__${toISO(friday)}`;
+}
+
+// يصلح تلقائياً النسخ اليدوية التي حُفظت قديماً تحت نطاقات مؤقتة عند
+// تغيير حقلي «من» و«إلى»، ويعيد كل صفقة إلى أسبوع تاريخها الحقيقي.
+function repairManualWeekStorage(){
+  try{
+    const weeks=readManualWeeks();
+    const repaired={};
+    Object.entries(weeks).forEach(([oldKey,list])=>{
+      if(!Array.isArray(list)) return;
+      list.forEach(trade=>{
+        const targetKey=canonicalTradingWeekKey(trade?.date)||oldKey;
+        repaired[targetKey]=mergeTradesWithoutDuplicates(repaired[targetKey]||[],[trade]);
+      });
+    });
+    writeManualWeeks(repaired);
+  }catch(_e){}
+}
+
+function deleteManualTradeEverywhere(trade){
+  try{
+    const signature=tradeStorageSignature(trade);
+    const weeks=readManualWeeks();
+    Object.keys(weeks).forEach(key=>{
+      if(!Array.isArray(weeks[key])) return;
+      weeks[key]=weeks[key].filter(item=>tradeStorageSignature(item)!==signature);
+      if(!weeks[key].length) delete weeks[key];
+    });
+    writeManualWeeks(weeks);
+  }catch(_e){}
+}
+
 function saveImportedTradesToSelectedWeek(importedTrades){
   const rangeKey=selectedWeekKey();
   const ranges=readExcelRanges();
   const saved=Array.isArray(ranges[rangeKey])?ranges[rangeKey]:[];
   ranges[rangeKey]=mergeTradesWithoutDuplicates(saved,importedTrades);
-  localStorage.setItem(EXCEL_RANGES_KEY,JSON.stringify(ranges));
+  writeExcelRanges(ranges);
   return ranges[rangeKey];
 }
 
@@ -161,7 +300,8 @@ function storedTradesForSelectedRange(){
 }
 
 function loadSelectedManualWeek(){
-  saveActiveManualWeek();
+  // لا نحفظ هنا: تغيير «من» ثم «إلى» كان ينسخ صفقات الأسبوع السابق
+  // إلى مفتاح تاريخ مؤقت قبل اكتمال اختيار النطاق الجديد.
   activeManualWeekKey=selectedWeekKey();
   const saved=readManualWeeks()[activeManualWeekKey];
   manualTrades=Array.isArray(saved)?saved:[];
@@ -1274,11 +1414,17 @@ $('manualTradesBody').addEventListener('click',e=>{
   const del=e.target.closest('.manual-delete');
   if(!del)return;
   const index=Number(del.dataset.index);
-  manualTrades.splice(index,1);
+  const deletedTrade=manualTrades[index];
+  if(!deletedTrade)return;
+  deleteManualTradeEverywhere(deletedTrade);
+  manualTrades=readManualWeeks()[activeManualWeekKey]||[];
   if(manualEditIndex===index) resetManualEditor();
   else if(manualEditIndex>index) manualEditIndex--;
-  saveActiveManualWeek();
   renderManualTrades();
+  // تحديث التقرير فوراً بعد الحذف مع إبقاء صفقات Excel كما هي.
+  trades=storedTradesForSelectedRange().map(t=>({...t}));
+  importedWorkbookActive=trades.length>0;
+  render();
 });
 $('manualCancelEdit').addEventListener('click',resetManualEditor);
 $('manualTradeForm').addEventListener('input',saveManualDraft);
@@ -1313,6 +1459,7 @@ window.addEventListener('beforeunload',()=>{saveManualDraft();saveActiveManualWe
 // يمكن للمستخدم بعد ذلك اختيار أي أسبوع أو شهر سابق يدوياً كالمعتاد.
 setCurrentWeekRange();
 saveSelectedRange();
+repairManualWeekStorage();
 activeManualWeekKey=selectedWeekKey();
 manualTrades=readManualWeeks()[activeManualWeekKey]||[];
 const initialStoredRangeTrades=storedTradesForSelectedRange();
@@ -1327,6 +1474,7 @@ updateFooterClock();
 setInterval(updateFooterClock,60000);
 render();
 try{if(localStorage.getItem(MANUAL_PAGE_OPEN_KEY)==='1') openManualEntry()}catch(_e){}
+initSharedCloud();
 
 // Q OPTIONS FINAL READY — live preview + iOS save
 console.log('Q OPTIONS BUILD v7.1 LIVE PREVIEW');
