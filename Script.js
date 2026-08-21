@@ -963,8 +963,10 @@ function buildShareTemplate(maxRows=10, captureId="shareCapture"){
               const px=16+i*(292/Math.max(1,equityValues.length-1));
               const py=122-(v-eqMin)/eqRange*94;
               const trade=equityTrades[i];
-              const labelX=px+(i%2===0?-7:10);
-              const labelY=py+(i%2===0?-7:11);
+              // تثبيت جميع الأسماء على خط سفلي واحد يمنع تداخلها مع
+              // نقاط المنحنى أو مع الأسماء المجاورة عند كثرة الصفقات.
+              const labelX=px;
+              const labelY=147;
               const label=trade?.profit>0 ? `<text class="equity-symbol" x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="start" transform="rotate(-90 ${labelX.toFixed(1)} ${labelY.toFixed(1)})">${escapeHtml(trade?.symbol||'').slice(0,5)}</text>` : '';
               return `<g class="equity-point"><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="#fff4cf" stroke="#9c6414" stroke-width="3"/>${label}</g>`;
             }).join('')}
