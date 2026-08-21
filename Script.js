@@ -135,10 +135,26 @@ function storedTradesForSelectedRange(){
     Object.entries(store).forEach(([key,list])=>{
       const range=parseStoredRangeKey(key);
       if(!range || !Array.isArray(list)) return;
-      // نطاق الحفظ هو المرجع الأساسي. هذا مهم لصفقات Excel لأن تاريخ الخلية
-      // قد يكون فارغاً أو مكتوباً بتنسيق مختلف، ومع ذلك تبقى الصفقة مرتبطة
-      // بالأسبوع الذي اختاره المستخدم وقت الرفع.
-      if(range.to>=selectedFrom && range.from<=selectedTo) collected.push(...list);
+      list.forEach(trade=>{
+        const tradeDate=parseDate(trade?.date);
+        const hasValidDate=/^\d{4}-\d{2}-\d{2}$/.test(tradeDate);
+
+        // الأساس هو تاريخ الصفقة نفسها، وليس مجرد تداخل نطاق التخزين.
+        // لذلك أسبوع واحد لا يسحب صفقات الأسبوع السابق، بينما تحديد
+        // أسبوعين أو شهر يجمع فقط الصفقات الواقعة داخل الاختيار فعلياً.
+        if(hasValidDate){
+          if(tradeDate>=selectedFrom && tradeDate<=selectedTo){
+            collected.push({...trade,date:tradeDate});
+          }
+          return;
+        }
+
+        // الصفقة التي لا تحمل تاريخاً صالحاً تُعرض فقط إذا كان نطاق حفظها
+        // كاملاً داخل النطاق المختار، منعاً لتسربها من أسبوع أو شهر آخر.
+        if(range.from>=selectedFrom && range.to<=selectedTo){
+          collected.push({...trade});
+        }
+      });
     });
   });
   return mergeTradesWithoutDuplicates([],collected);
