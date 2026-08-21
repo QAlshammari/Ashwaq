@@ -1476,6 +1476,11 @@ body{
 .stats-grid .status-stopped-card{background:linear-gradient(145deg,#fbfeff,#e5f8fb)!important;border-color:#9bdbe5!important;box-shadow:0 8px 0 rgba(21,145,167,.36),0 17px 31px rgba(25,165,189,.25),inset 0 2px 0 #fff!important}
 .stats-grid .status-loss-card{background:linear-gradient(145deg,#fffdfd,#fff0ed)!important;border-color:#efb9b3!important;box-shadow:0 8px 0 rgba(183,51,43,.35),0 17px 31px rgba(220,64,55,.24),inset 0 2px 0 #fff!important}
 
+/* مؤشرات الرئيسية: أربعة صناديق في الصف الأول وثلاثة في الصف الثاني */
+.stats-grid{grid-template-columns:repeat(12,minmax(0,1fr))!important}
+.stats-grid>.stat-card{grid-column:span 3}
+.stats-grid>.status-win-card,.stats-grid>.status-stopped-card,.stats-grid>.status-loss-card{grid-column:span 4}
+
 .action-btn{
   overflow:hidden;
   isolation:isolate;
