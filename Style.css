@@ -3519,6 +3519,56 @@ body{
 .capture-mode .info-table.roomy thead th::before,
 .capture-mode .info-table.roomy thead th::after{display:none!important;content:none!important}
 
+/* REPORT42 — تذييل ثنائي ووضوح أعلى بعد ضغط تليجرام */
+.refined-light .report-footer-note,
+.capture-mode .report-footer-note{
+  display:grid!important;
+  grid-template-columns:minmax(0,1.75fr) minmax(300px,.85fr)!important;
+  direction:rtl!important;
+  align-items:center!important;
+  gap:18px!important;
+  width:calc(100% - 36px)!important;
+  min-height:66px!important;
+  margin:0 auto 22px!important;
+  padding:11px 18px!important;
+  background:#fff!important;
+  border:1px solid #dec58f!important;
+  border-bottom:5px solid #aa7423!important;
+  border-radius:15px!important;
+  box-shadow:0 8px 14px rgba(91,58,15,.13),inset 0 2px 0 #fff!important;
+}
+.refined-light .report-disclaimer,
+.capture-mode .report-disclaimer{
+  color:#111!important;
+  font:900 17px/1.7 Tahoma,Arial,sans-serif!important;
+  text-align:right!important;
+  letter-spacing:0!important;
+}
+.refined-light .report-footer-note .info-contact,
+.capture-mode .report-footer-note .info-contact{
+  width:auto!important;min-height:0!important;margin:0!important;padding:0!important;
+  direction:rtl!important;text-align:left!important;justify-content:flex-start!important;
+  color:#2d2419!important;background:none!important;border:0!important;
+  border-radius:0!important;box-shadow:none!important;
+  font:800 17px/1.5 Tahoma,Arial,sans-serif!important;
+}
+.refined-light .report-footer-note .info-contact b,
+.capture-mode .report-footer-note .info-contact b{color:#855817!important;font-size:19px!important}
+.capture-mode .report-footer-note{box-shadow:0 6px 0 #cfaa68!important}
+
+/* نصوص وحدود أكثر حدّة في نسخة العرض والحفظ */
+.refined-light .info-table.roomy thead th,
+.capture-mode .info-table.roomy thead th{
+  color:#181109!important;font-weight:900!important;text-shadow:none!important;
+  -webkit-font-smoothing:antialiased!important;
+}
+.refined-light .info-table.roomy tbody td,
+.capture-mode .info-table.roomy tbody td{
+  color:#17120c!important;font-weight:900!important;
+  border-left-color:#d7c29d!important;
+  -webkit-font-smoothing:antialiased!important;
+}
+
 /* REPORT KPI REBUILD — نفس روح صناديق الصفحة الرئيسية */
 .refined-light .info-stats.refined-order,
 .capture-mode .info-stats.refined-order,
