@@ -3840,37 +3840,38 @@ body{
   letter-spacing:.2px!important;
 }
 
-/* توحيد مستوى العنوان والرقم داخل صناديق الإحصائيات الخمسة */
+/* إبقاء الصناديق على تخطيطها الأصلي السليم ومنع تداخل النص مع الرقم */
 .refined-light .info-stats.refined-order .info-stat,
 .capture-mode .info-stats.refined-order .info-stat{
-  display:grid!important;
-  grid-template-rows:34px 34px!important;
-  align-content:center!important;
-  justify-items:center!important;
-  row-gap:5px!important;
-}
-.refined-light .info-stats.refined-order .info-stat .info-stat-top,
-.capture-mode .info-stats.refined-order .info-stat .info-stat-top{
-  width:100%!important;
-  height:34px!important;
-  min-height:34px!important;
-  margin:0!important;
+  display:flex!important;
+  flex-direction:column!important;
   align-items:center!important;
   justify-content:center!important;
+}
+.refined-light .info-stats.refined-order .info-stat.totalprofit .info-stat-top,
+.capture-mode .info-stats.refined-order .info-stat.totalprofit .info-stat-top{
+  margin:0!important;
   transform:none!important;
 }
-.refined-light .info-stats.refined-order .info-stat .digital,
-.capture-mode .info-stats.refined-order .info-stat .digital,
 .refined-light .info-stats.refined-order .info-stat.totalprofit .digital.money,
 .capture-mode .info-stats.refined-order .info-stat.totalprofit .digital.money{
-  height:34px!important;
-  min-height:34px!important;
-  margin:0!important;
-  display:flex!important;
-  align-items:center!important;
-  justify-content:center!important;
+  margin-top:4px!important;
   transform:none!important;
-  line-height:1!important;
+}
+
+/* تكبير أسماء الشركات داخل رسم العائد ومنحنى الأداء */
+.refined-light .report-mini-chart .bar-symbol,
+.capture-mode .report-mini-chart .bar-symbol,
+.refined-light .report-mini-chart .equity-symbol,
+.capture-mode .report-mini-chart .equity-symbol{
+  font-size:13px!important;
+  font-weight:900!important;
+}
+.refined-light .report-mini-chart.dense-chart .bar-symbol,
+.capture-mode .report-mini-chart.dense-chart .bar-symbol,
+.refined-light .report-mini-chart.dense-chart .equity-symbol,
+.capture-mode .report-mini-chart.dense-chart .equity-symbol{
+  font-size:11px!important;
 }
 
 /* نتائج الصفقات داخل جدول الإدخال اليدوي */
@@ -3892,3 +3893,39 @@ body{
 .manual-excel-save span{font-size:21px;line-height:1}
 .manual-excel-save:active{transform:translateY(5px);box-shadow:0 1px 0 #4d9361,0 6px 11px rgba(45,117,65,.13),inset 0 2px 0 #fff}
 @media(max-width:620px){.manual-excel-save{min-height:48px;font-size:13px;margin-bottom:22px}}
+
+/* صناديق التقرير: الأيقونة بجانب العبارة والرقم في سطر مستقل */
+.refined-light .info-stats.refined-order .info-stat .info-stat-top,
+.capture-mode .info-stats.refined-order .info-stat .info-stat-top,
+.refined-light .info-stats.refined-order .info-stat.totalprofit .info-stat-top,
+.capture-mode .info-stats.refined-order .info-stat.totalprofit .info-stat-top{
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:7px!important;
+  width:100%!important;
+  margin:0!important;
+}
+.refined-light .info-stats.refined-order .info-stat .info-icon,
+.capture-mode .info-stats.refined-order .info-stat .info-icon{
+  margin:0!important;
+  flex:0 0 30px!important;
+}
+.refined-light .info-stats.refined-order .info-stat .info-label,
+.capture-mode .info-stats.refined-order .info-stat .info-label{
+  width:auto!important;
+  min-width:0!important;
+  text-align:right!important;
+}
+
+/* الصفحة الرئيسية: أرقام البوكسات أصغر ومتوازنة على الجوال */
+@media(max-width:650px){
+  .stats-grid .stat-card .stat-copy strong.digital-main{
+    font-size:16px!important;
+    line-height:1.1!important;
+    letter-spacing:0!important;
+    white-space:nowrap!important;
+  }
+  .stats-grid .stat-card #totalProfit{font-size:14px!important}
+}
