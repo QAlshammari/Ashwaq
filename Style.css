@@ -4035,3 +4035,11 @@ body{
   letter-spacing:0!important;
   transform:none!important;
 }
+/* إخفاء الرسوم البيانية من التقرير مؤقتاً */
+.infographic-card .info-bottom{
+  display:none!important;
+}
+.refined-light .infographic-table-panel,
+.capture-mode .infographic-table-panel{
+  margin-top:8px!important;
+}
