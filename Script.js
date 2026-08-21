@@ -192,7 +192,8 @@ function currentWeekRange(){
   const from = new Date(today);
   from.setDate(today.getDate()+diffToMonday);
   const to = new Date(from);
-  to.setDate(from.getDate()+6);
+  // أسبوع التداول الرسمي: من الاثنين إلى الجمعة فقط.
+  to.setDate(from.getDate()+4);
   return {from:toISO(from),to:toISO(to)};
 }
 
@@ -201,30 +202,6 @@ function addDays(iso,days){
   const date = new Date(y,m-1,d,12,0,0);
   date.setDate(date.getDate()+days);
   return toISO(date);
-}
-
-// البيانات التجريبية من Q-Options-FINAL41(2) فقط — بدون أي تعديل.
-function buildDemoTrades(){
-  const {from} = currentWeekRange();
-  return [
-    {date:addDays(from,0),symbol:'NVDA',option:'CALL',strike:'1000',buy:12.50,sell:18.90,profit:640,pct:51.20,notes:'Breakout play'},
-    {date:addDays(from,0),symbol:'SPY',option:'CALL',strike:'532',buy:6.30,sell:10.80,profit:450,pct:71.43,notes:'Bull trend follow'},
-    {date:addDays(from,1),symbol:'AAPL',option:'CALL',strike:'195',buy:4.60,sell:6.90,profit:230,pct:50.00,notes:'Earnings play'},
-    {date:addDays(from,1),symbol:'QQQ',option:'CALL',strike:'445',buy:3.20,sell:4.90,profit:170,pct:53.13,notes:'Momentum'},
-    {date:addDays(from,1),symbol:'META',option:'PUT',strike:'510',buy:7.80,sell:7.00,profit:-80,pct:-10.26,notes:'Rejection'},
-    {date:addDays(from,2),symbol:'TSLA',option:'PUT',strike:'170',buy:8.20,sell:2.10,profit:-610,pct:-74.39,notes:'Stop hit'},
-    {date:addDays(from,2),symbol:'AMD',option:'CALL',strike:'150',buy:5.10,sell:1.20,profit:-390,pct:-76.47,notes:'Weak guidance'},
-    {date:addDays(from,2),symbol:'COIN',option:'CALL',strike:'240',buy:3.40,sell:2.80,profit:-60,pct:-17.65,notes:'News impact'},
-    {date:addDays(from,3),symbol:'INTC',option:'PUT',strike:'30',buy:1.20,sell:.80,profit:-40,pct:-33.33,notes:'Weak chart'},
-    {date:addDays(from,3),symbol:'PLTR',option:'CALL',strike:'20',buy:1.70,sell:1.10,profit:-5.29,pct:-5.29,notes:'Rejection'},
-    {date:addDays(from,3),symbol:'RIVN',option:'PUT',strike:'12',buy:.90,sell:.50,profit:-40.49,pct:-44.44,notes:'Stop hit'},
-    {date:addDays(from,4),symbol:'SNAP',option:'PUT',strike:'10',buy:.40,sell:.40,profit:0,pct:0,notes:'Flat'},
-    {date:addDays(from,4),symbol:'SOFI',option:'CALL',strike:'7',buy:.30,sell:.30,profit:-7.14,pct:-57.14,notes:'Stop hit'},
-    {date:addDays(from,4),symbol:'NFLX',option:'CALL',strike:'980',buy:9.20,sell:null,profit:0,pct:0,notes:'مفتوحة'},
-    {date:addDays(from,4),symbol:'AMZN',option:'CALL',strike:'190',buy:4.10,sell:6.60,profit:250,pct:60.98,notes:'Breakout'},
-    {date:addDays(from,4),symbol:'MSFT',option:'CALL',strike:'420',buy:5.40,sell:7.90,profit:250,pct:46.30,notes:'Trend'},
-    {date:addDays(from,4),symbol:'GOOGL',option:'CALL',strike:'175',buy:3.80,sell:5.10,profit:130,pct:34.21,notes:'Continuation'}
-  ];
 }
 
 function setCurrentWeekRange(){
@@ -1316,10 +1293,10 @@ $('fromDate').addEventListener('change',handleSelectedWeekChange);
 $('toDate').addEventListener('change',handleSelectedWeekChange);
 window.addEventListener('beforeunload',()=>{saveManualDraft();saveActiveManualWeek()});
 
-if(!restoreSelectedRange()){
-  setCurrentWeekRange();
-  saveSelectedRange();
-}
+// عند كل فتح للموقع نبدأ تلقائياً بأسبوع التداول الحالي (الاثنين–الجمعة).
+// يمكن للمستخدم بعد ذلك اختيار أي أسبوع أو شهر سابق يدوياً كالمعتاد.
+setCurrentWeekRange();
+saveSelectedRange();
 activeManualWeekKey=selectedWeekKey();
 manualTrades=readManualWeeks()[activeManualWeekKey]||[];
 const initialStoredRangeTrades=storedTradesForSelectedRange();
@@ -1327,7 +1304,8 @@ if(initialStoredRangeTrades.length){
   importedWorkbookActive=true;
   trades=initialStoredRangeTrades.map(t=>({...t}));
 }else{
-  trades=buildDemoTrades();
+  // لا نعرض صفقات تجريبية عند عدم وجود بيانات محفوظة حقيقية.
+  trades=[];
 }
 updateFooterClock();
 setInterval(updateFooterClock,60000);
