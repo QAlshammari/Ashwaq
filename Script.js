@@ -252,8 +252,27 @@ function deleteManualTradeEverywhere(trade){
 function saveImportedTradesToSelectedWeek(importedTrades){
   const rangeKey=selectedWeekKey();
   const ranges=readExcelRanges();
-  const saved=Array.isArray(ranges[rangeKey])?ranges[rangeKey]:[];
-  ranges[rangeKey]=mergeTradesWithoutDuplicates(saved,importedTrades);
+
+  const selectedFrom=$('fromDate')?.value || currentWeekRange().from;
+  const selectedTo=$('toDate')?.value || currentWeekRange().to;
+
+  // ملف Excel المرفوع هو النسخة الأحدث للفترة المختارة، وليس دفعة إضافية.
+  // ننظف أولاً أي صفوف Excel قديمة تخص هذه الفترة حتى لو حُفظت سابقاً
+  // تحت مفتاح نطاق مختلف، ثم نخزن محتوى الملف الجديد مرة واحدة.
+  Object.keys(ranges).forEach(key=>{
+    const list=Array.isArray(ranges[key])?ranges[key]:[];
+    const kept=list.filter(trade=>{
+      const tradeDate=parseDate(trade?.date);
+      if(/^\d{4}-\d{2}-\d{2}$/.test(tradeDate)){
+        return tradeDate<selectedFrom || tradeDate>selectedTo;
+      }
+      return key!==rangeKey;
+    });
+    if(kept.length) ranges[key]=kept;
+    else delete ranges[key];
+  });
+
+  ranges[rangeKey]=mergeTradesWithoutDuplicates([],importedTrades);
   writeExcelRanges(ranges);
   return ranges[rangeKey];
 }
@@ -662,8 +681,8 @@ async function handleFile(file){
       return;
     }
 
-    // صفقات Excel تُحفظ داخل الأسبوع المحدد مثل الصفقات اليدوية، مع إبقاء
-    // الصفقات السابقة ومنع تكرار الصفوف عند رفع الملف نفسه مرة أخرى.
+    // ملف Excel الجديد يستبدل نسخة Excel السابقة للفترة المختارة، بينما
+    // تبقى الصفقات اليدوية والفترات الأخرى محفوظة كما هي.
     saveImportedTradesToSelectedWeek(normalized);
     trades=storedTradesForSelectedRange().map(t=>({...t}));
     importedWorkbookActive=true;
