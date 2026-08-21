@@ -517,6 +517,7 @@ function render(){
   $('totalProfit').textContent=money(s.net); colorize($('totalProfit'),s.net);
   $('returnPct').textContent=pct(s.returnP); colorize($('returnPct'),s.returnP);
   $('wins').textContent=s.wins.length;
+  $('stopped').textContent=s.stopped.length;
   $('losses').textContent=s.losses.length;
   $('winRate').textContent=`${s.winRate.toFixed(2)}%`; colorize($('winRate'),s.winRate);
 
@@ -548,7 +549,13 @@ function escapeHtml(value){
 }
 
 function renderTable(data){
-  $('tradesBody').innerHTML=data.map((t,i)=>`
+  const outcomeOrder={win:0,stopped:1,loss:2,open:3,flat:4};
+  const orderedData=[...data].sort((a,b)=>
+    (outcomeOrder[tradeOutcome(a)]??9)-(outcomeOrder[tradeOutcome(b)]??9) ||
+    (a.date||'').localeCompare(b.date||'') ||
+    String(a.symbol).localeCompare(String(b.symbol))
+  );
+  $('tradesBody').innerHTML=orderedData.map((t,i)=>`
     <tr>
       <td>${i+1}</td>
       <td dir="ltr">${escapeHtml(t.symbol)}</td>
@@ -613,7 +620,7 @@ function renderCharts(ordered,byDay,winCount,lossCount,stoppedCount=0){
   });
   winLossChart=new Chart($('winLossChart'),{
     type:'doughnut',
-    data:{labels:['رابحة','خاسرة','موقوفة'],datasets:[{data:[winCount,lossCount,stoppedCount],backgroundColor:c=>chartGradient(c,c.dataIndex===0?'#9ee3af':c.dataIndex===1?'#ffaaa0':'#9fe9f2',c.dataIndex===0?'#27854b':c.dataIndex===1?'#b92e2a':'#159ab1'),borderColor:['#fff5d7','#fff0e8','#e8fbff'],borderWidth:4,hoverOffset:10,spacing:3}]},
+    data:{labels:['ناجحة','خاسرة','موقوفة'],datasets:[{data:[winCount,lossCount,stoppedCount],backgroundColor:c=>chartGradient(c,c.dataIndex===0?'#9ee3af':c.dataIndex===1?'#ffaaa0':'#9fe9f2',c.dataIndex===0?'#27854b':c.dataIndex===1?'#b92e2a':'#159ab1'),borderColor:['#fff5d7','#fff0e8','#e8fbff'],borderWidth:4,hoverOffset:10,spacing:3}]},
     options:{responsive:true,maintainAspectRatio:false,animation:false,cutout:'58%',rotation:-105,circumference:360,plugins:{legend:{position:'right',rtl:true,labels:{boxWidth:15,padding:18,font:{weight:'800'}}}}}
   });
 }
@@ -771,7 +778,7 @@ function tradeOptionLabel(trade){
 function tradeStatusMeta(trade){
   const outcome=tradeOutcome(trade);
   if(outcome==='stopped') return {cls:'stopped',labelAr:'موقوفة'};
-  if(outcome==='loss') return {cls:'loss',labelAr:'خسارة'};
+  if(outcome==='loss') return {cls:'loss',labelAr:'خاسرة'};
   if(outcome==='open') return {cls:'open',labelAr:'مفتوحة'};
   if(outcome==='flat') return {cls:'flat',labelAr:'متعادل'};
   return {cls:'win',labelAr:'ربح'};
@@ -785,7 +792,7 @@ function buildPdfTemplate(){
 function buildShareTemplate(maxRows=10, captureId="shareCapture"){
   const filtered=getFilteredTrades();
   const s=calculateStats(filtered);
-  // ترتيب التقرير: الرابحة أولاً، ثم الموقوفة، ثم الخاسرة.
+  // ترتيب التقرير: الناجحة أولاً، ثم الموقوفة، ثم الخاسرة.
   const outcomeOrder={win:0,stopped:1,loss:2};
   const rowsData=[...s.counted].sort((a,b)=>
     (outcomeOrder[tradeOutcome(a)]??9)-(outcomeOrder[tradeOutcome(b)]??9) ||
@@ -864,7 +871,7 @@ function buildShareTemplate(maxRows=10, captureId="shareCapture"){
           <div class="digital cyan">${stoppedCount}</div>
         </div>
         <div class="info-stat win-stat">
-          <div class="info-stat-top"><span class="info-icon win">✓</span><div class="info-label"><b>الصفقات الرابحة</b></div></div>
+          <div class="info-stat-top"><span class="info-icon win">✓</span><div class="info-label"><b>الصفقات الناجحة</b></div></div>
           <div class="digital green">${s.wins.length}</div>
         </div>
         <div class="info-stat total-trades-stat">
@@ -892,7 +899,7 @@ function buildShareTemplate(maxRows=10, captureId="shareCapture"){
               <div class="distribution-total"><b>${s.counted.length}</b><span>إجمالي</span></div>
             </div>
             <div class="distribution-legend">
-              <div class="legend-row win"><i></i><span>رابحة</span><b>${s.wins.length} — ${winPct.toFixed(1).replace('.0','')}%</b></div>
+              <div class="legend-row win"><i></i><span>ناجحة</span><b>${s.wins.length} — ${winPct.toFixed(1).replace('.0','')}%</b></div>
               <div class="legend-row stopped"><i></i><span>موقوفة</span><b>${stoppedCount} — ${stoppedPct.toFixed(1).replace('.0','')}%</b></div>
               <div class="legend-row loss"><i></i><span>خاسرة</span><b>${s.losses.length} — ${lossPct.toFixed(1).replace('.0','')}%</b></div>
             </div>
@@ -915,7 +922,7 @@ function buildShareTemplate(maxRows=10, captureId="shareCapture"){
 
         <div class="info-box">
           <h4 class="equity-title">منحنى الأداء التراكمي</h4>
-          <svg class="report-mini-chart equity-chart ${denseEquity?'dense-chart':''}" viewBox="0 0 330 150" role="img" aria-label="منحنى الأداء التراكمي للصفقات الرابحة">
+          <svg class="report-mini-chart equity-chart ${denseEquity?'dense-chart':''}" viewBox="0 0 330 150" role="img" aria-label="منحنى الأداء التراكمي للصفقات الناجحة">
             <defs><linearGradient id="equityFill-${captureId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d69b31" stop-opacity=".20"/><stop offset="1" stop-color="#d69b31" stop-opacity=".015"/></linearGradient></defs>
             <g class="chart-grid"><line x1="12" y1="28" x2="320" y2="28"/><line x1="12" y1="52" x2="320" y2="52"/><line x1="12" y1="76" x2="320" y2="76"/><line x1="12" y1="100" x2="320" y2="100"/><line x1="12" y1="123" x2="320" y2="123"/></g>
             <line class="chart-zero" x1="12" y1="123" x2="320" y2="123"/>
