@@ -164,7 +164,7 @@ footer{min-height:58px;display:grid;grid-template-columns:1fr 1fr 1fr;align-item
 .footer-brand{direction:ltr;font-weight:800;letter-spacing:1px;color:#876329}.footer-contact{text-align:center;color:#927d61}.footer-contact b{color:#785720;font-size:11px}.footer-contact b::before{content:"• ";color:#c49749}.footer-contact b::after{content:" •";color:#c49749}footer>div:last-child{text-align:left;direction:ltr}
 
 /* ========================= EXPORT TEMPLATES ========================= */
-.export-stage{position:fixed;left:0;top:0;z-index:-9999;width:1200px;min-width:1200px;pointer-events:none;overflow:visible}
+.export-stage{position:fixed;left:0;top:0;z-index:-9999;width:1400px;min-width:1400px;pointer-events:none;overflow:visible}
 .export-stage .infographic-card{
   width:1120px!important;
   min-width:1120px!important;
@@ -4042,4 +4042,71 @@ body{
 .refined-light .infographic-table-panel,
 .capture-mode .infographic-table-panel{
   margin-top:8px!important;
+}
+
+/* ===== WIDE REPORT + LARGER TYPE ===== */
+.refined-light.infographic-card,
+.capture-mode.infographic-card{
+  width:1400px!important;
+  min-width:1400px!important;
+  max-width:1400px!important;
+  padding:28px 30px 26px!important;
+}
+.preview-live-scale{width:1400px!important}
+.refined-light .info-logo.bigger,
+.capture-mode .info-logo.bigger{
+  width:650px!important;
+  height:260px!important;
+}
+.refined-light .info-stats.refined-order,
+.capture-mode .info-stats.refined-order{
+  margin-inline:22px!important;
+  gap:15px!important;
+}
+.refined-light .info-stats.refined-order .info-label b,
+.capture-mode .info-stats.refined-order .info-label b{
+  font-size:18px!important;
+}
+.refined-light .info-stats.refined-order .info-stat .digital,
+.capture-mode .info-stats.refined-order .info-stat .digital,
+.refined-light .info-stats.refined-order .info-stat.totalprofit .digital,
+.capture-mode .info-stats.refined-order .info-stat.totalprofit .digital{
+  font-size:36px!important;
+}
+.refined-light .info-table-head h3.table-head-box,
+.capture-mode .info-table-head h3.table-head-box{
+  font-size:36px!important;
+}
+.refined-light .table-head-box,
+.capture-mode .table-head-box{
+  font-size:21px!important;
+}
+.refined-light .info-table.roomy thead th,
+.capture-mode .info-table.roomy thead th{
+  font-size:23px!important;
+  padding:16px 10px!important;
+}
+.refined-light .info-table.roomy tbody td,
+.capture-mode .info-table.roomy tbody td,
+.refined-light .infographic-table-panel.many-trades .info-table.roomy tbody td,
+.capture-mode .infographic-table-panel.many-trades .info-table.roomy tbody td{
+  font-size:24px!important;
+  padding:15px 10px!important;
+  line-height:1.35!important;
+}
+.refined-light .info-table .symbol-cell,
+.capture-mode .info-table .symbol-cell,
+.refined-light .infographic-table-panel.many-trades .symbol-cell,
+.capture-mode .infographic-table-panel.many-trades .symbol-cell{
+  font-size:27px!important;
+}
+.refined-light .infographic-table-panel.many-trades .info-chip,
+.refined-light .infographic-table-panel.many-trades .info-status,
+.capture-mode .infographic-table-panel.many-trades .info-chip,
+.capture-mode .infographic-table-panel.many-trades .info-status{
+  font-size:25px!important;
+}
+.refined-light .report-footer-note,
+.capture-mode .report-footer-note{
+  font-size:19px!important;
 }
