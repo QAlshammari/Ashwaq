@@ -1002,7 +1002,10 @@ function buildShareTemplate(maxRows=10, captureId="shareCapture"){
         </table>
       </div>
 
-      <div class="info-contact footer-only">للتواصل عبر تليجرام <b dir="ltr">@Qalshammari</b></div>
+      <div class="report-footer-note footer-only">
+        <div class="report-disclaimer">جميع نتائج الصفقات المطروحة في الجدول عبارة عن سعر الدخول والتوجيه بالخروج، وليست أعلى سعر محقق للعقد.</div>
+        <div class="info-contact">للتواصل عبر تليجرام <b dir="ltr">@Qalshammari</b></div>
+      </div>
     </div>`;
 }
 
@@ -1268,8 +1271,10 @@ async function saveOrShareTopTrades(e){
 
     const captureWidth=REPORT_WIDTH;
     const captureHeight=Math.ceil(Math.max(target.scrollHeight,target.getBoundingClientRect().height));
-    // دقة أعلى للصورة النهائية مع حد آمن لذاكرة Safari على الآيفون.
-    const scale=2;
+    // دقة أعلى للصورة النهائية لتبقى الكتابة واضحة بعد ضغط تطبيقات المراسلة.
+    // نستخدم 3x عادة، مع تخفيض تلقائي فقط للتقارير الطويلة حمايةً لذاكرة Safari.
+    const maxCanvasPixels=32_000_000;
+    const scale=Math.max(2.25,Math.min(3,Math.sqrt(maxCanvasPixels/(captureWidth*captureHeight))));
     const canvas=await html2canvas(target,{
       scale,
       width:captureWidth,
