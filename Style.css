@@ -4235,3 +4235,98 @@ body{
   line-height:1.55!important;
   font-weight:900!important;
 }
+
+/* ===== EXTRA LARGE / FULL CELL USE — final override ===== */
+.refined-light .info-stats.refined-order,
+.capture-mode .info-stats.refined-order{
+  margin:12px 6px 0!important;
+  gap:12px!important;
+}
+.refined-light .info-stats.refined-order .info-stat,
+.capture-mode .info-stats.refined-order .info-stat{
+  height:150px!important;
+  min-height:150px!important;
+  max-height:150px!important;
+}
+.refined-light .info-stats.refined-order .info-stat .info-stat-top,
+.capture-mode .info-stats.refined-order .info-stat .info-stat-top{
+  inset:17px 5px auto!important;
+  height:39px!important;
+  min-height:39px!important;
+  gap:8px!important;
+}
+.refined-light .info-stats.refined-order .info-stat .info-label b,
+.capture-mode .info-stats.refined-order .info-stat .info-label b{
+  font-size:22px!important;
+  line-height:1.15!important;
+}
+.refined-light .info-stats.refined-order .info-stat .info-icon,
+.capture-mode .info-stats.refined-order .info-stat .info-icon{
+  font-size:22px!important;
+}
+.refined-light .info-stats.refined-order .info-stat .digital,
+.capture-mode .info-stats.refined-order .info-stat .digital,
+.refined-light .info-stats.refined-order .info-stat.totalprofit .digital,
+.capture-mode .info-stats.refined-order .info-stat.totalprofit .digital,
+.refined-light .info-stats.refined-order .info-stat.totalprofit .digital.money,
+.capture-mode .info-stats.refined-order .info-stat.totalprofit .digital.money{
+  inset:69px 3px auto!important;
+  height:48px!important;
+  min-height:48px!important;
+  font-size:45px!important;
+}
+.refined-light .table-title-boxes,
+.capture-mode .table-title-boxes{
+  gap:12px!important;
+}
+.refined-light .table-head-box,
+.capture-mode .table-head-box{
+  min-height:74px!important;
+  padding:10px 16px!important;
+  box-sizing:border-box!important;
+}
+.refined-light .info-table-head h3.table-head-box,
+.capture-mode .info-table-head h3.table-head-box{
+  font-size:40px!important;
+  line-height:1.15!important;
+}
+.refined-light .best-trade-badge small,
+.capture-mode .best-trade-badge small{
+  font-size:21px!important;
+  line-height:1.15!important;
+}
+.refined-light .best-trade-badge b,
+.capture-mode .best-trade-badge b,
+.refined-light .table-week-date,
+.capture-mode .table-week-date{
+  font-size:25px!important;
+  line-height:1.2!important;
+  font-weight:900!important;
+}
+.refined-light .info-table.roomy thead th,
+.capture-mode .info-table.roomy thead th{
+  font-size:29px!important;
+  padding:19px 7px!important;
+  line-height:1.2!important;
+}
+.refined-light .info-table.roomy tbody td,
+.capture-mode .info-table.roomy tbody td,
+.refined-light .infographic-table-panel.many-trades .info-table.roomy tbody td,
+.capture-mode .infographic-table-panel.many-trades .info-table.roomy tbody td{
+  font-size:30px!important;
+  padding:18px 7px!important;
+  line-height:1.25!important;
+}
+.refined-light .info-table .symbol-cell,
+.capture-mode .info-table .symbol-cell,
+.refined-light .infographic-table-panel.many-trades .symbol-cell,
+.capture-mode .infographic-table-panel.many-trades .symbol-cell{
+  font-size:32px!important;
+}
+.refined-light .info-table .info-chip,
+.refined-light .info-table .info-status,
+.capture-mode .info-table .info-chip,
+.capture-mode .info-table .info-status{
+  font-size:30px!important;
+  line-height:1.2!important;
+}
