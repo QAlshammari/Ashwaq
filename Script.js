@@ -6,7 +6,7 @@ let manualEditIndex = -1;
 let activeManualWeekKey = '';
 
 const $ = id => document.getElementById(id);
-const REPORT_WIDTH = 1120;
+const REPORT_WIDTH = 1400;
 const SAVED_RANGE_KEY = 'qOptionsSelectedReportRange';
 const MANUAL_WEEKS_KEY = 'qOptionsManualTradesByWeekV1';
 const EXCEL_RANGES_KEY = 'qOptionsExcelTradesByRangeV1';
