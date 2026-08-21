@@ -205,6 +205,33 @@ function mergeTradesWithoutDuplicates(existing,incoming){
   return merged;
 }
 
+// هوية الصفقة التي لا تتغير عند تعديل نتيجة الصفقة. لا نضع سعر البيع أو
+// الربح هنا حتى يحل آخر تعديل محل النسخة القديمة بدلاً من إنشاء صفقة جديدة.
+function tradeEditIdentity(trade){
+  return [
+    parseDate(trade?.date)||'',
+    String(trade?.symbol||'').trim().toUpperCase(),
+    String(trade?.option||'').trim().toUpperCase(),
+    String(trade?.strike||'').trim(),
+    Number(trade?.buy)||0
+  ].join('|');
+}
+
+function mergeTradesKeepingLatest(existing,incoming){
+  const result=[];
+  const positions=new Map();
+  [...(Array.isArray(existing)?existing:[]),...(Array.isArray(incoming)?incoming:[])].forEach(trade=>{
+    const key=tradeEditIdentity(trade);
+    if(positions.has(key)){
+      result[positions.get(key)]={...trade};
+    }else{
+      positions.set(key,result.length);
+      result.push({...trade});
+    }
+  });
+  return result;
+}
+
 function canonicalTradingWeekKey(dateValue){
   const iso=parseDate(dateValue);
   if(!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
@@ -272,7 +299,8 @@ function saveImportedTradesToSelectedWeek(importedTrades){
     else delete ranges[key];
   });
 
-  ranges[rangeKey]=mergeTradesWithoutDuplicates([],importedTrades);
+  // إذا احتوى الملف نفسه على النسخة القديمة والمعدلة، نعتمد آخر صف فقط.
+  ranges[rangeKey]=mergeTradesKeepingLatest([],importedTrades);
   writeExcelRanges(ranges);
   return ranges[rangeKey];
 }
@@ -315,7 +343,9 @@ function storedTradesForSelectedRange(){
       });
     });
   });
-  return mergeTradesWithoutDuplicates([],collected);
+  // ترتيب المصادر هو اليدوي ثم Excel؛ عند وجود هوية واحدة في المصدرين
+  // تكون نسخة Excel الأحدث هي الظاهرة في التقرير والإحصائيات.
+  return mergeTradesKeepingLatest([],collected);
 }
 
 function loadSelectedManualWeek(){
