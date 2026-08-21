@@ -1471,6 +1471,11 @@ body{
 .stat-card .icon.gold,.stat-card .icon.gold-soft{box-shadow:0 6px 0 #9b6a1e,0 0 24px rgba(227,170,57,.52),inset 0 2px 0 rgba(255,255,255,.62)!important}
 .stat-card .icon.bronze{box-shadow:0 6px 0 #795021,0 0 22px rgba(180,112,44,.45),inset 0 2px 0 rgba(255,255,255,.55)!important}
 
+/* ظلال صناديق حالات الصفقات في الصفحة الرئيسية */
+.stats-grid .status-win-card{background:linear-gradient(145deg,#fbfffd,#eaf8ef)!important;border-color:#a9dfbb!important;box-shadow:0 8px 0 rgba(38,139,72,.34),0 17px 31px rgba(42,164,83,.25),inset 0 2px 0 #fff!important}
+.stats-grid .status-stopped-card{background:linear-gradient(145deg,#fbfeff,#e5f8fb)!important;border-color:#9bdbe5!important;box-shadow:0 8px 0 rgba(21,145,167,.36),0 17px 31px rgba(25,165,189,.25),inset 0 2px 0 #fff!important}
+.stats-grid .status-loss-card{background:linear-gradient(145deg,#fffdfd,#fff0ed)!important;border-color:#efb9b3!important;box-shadow:0 8px 0 rgba(183,51,43,.35),0 17px 31px rgba(220,64,55,.24),inset 0 2px 0 #fff!important}
+
 .action-btn{
   overflow:hidden;
   isolation:isolate;
