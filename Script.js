@@ -562,17 +562,21 @@ function renderTable(data){
     (a.date||'').localeCompare(b.date||'') ||
     String(a.symbol).localeCompare(String(b.symbol))
   );
-  $('tradesBody').innerHTML=orderedData.map((t,i)=>`
+  $('tradesBody').innerHTML=orderedData.map((t,i)=>{
+    const outcome=tradeOutcome(t);
+    const valueClass=outcome==='stopped'?'stopped':outcome==='win'?'profit':outcome==='loss'?'loss':'';
+    return `
     <tr>
       <td>${i+1}</td>
       <td dir="ltr">${escapeHtml(t.symbol)}</td>
       <td>${escapeHtml(t.strike)}</td>
       <td dir="ltr">${money(t.buy).replace('$','')}</td>
       <td dir="ltr">${t.sell===null?'—':money(t.sell).replace('$','')}</td>
-      <td class="${t.profit>0?'profit':t.profit<0?'loss':''}">${t.sell===null&&t.profit===0?'<span style="color:#b48630">مفتوحة</span>':money(t.profit)}</td>
-      <td class="${t.pct>0?'profit':t.pct<0?'loss':''}">${t.sell===null&&t.profit===0?'—':pct(t.pct)}</td>
-      <td>${escapeHtml(displayTradeNote(t.notes))}</td>
-    </tr>`).join('');
+      <td class="${valueClass}">${t.sell===null&&t.profit===0?'<span style="color:#b48630">مفتوحة</span>':money(t.profit)}</td>
+      <td class="${valueClass}">${t.sell===null&&t.profit===0?'—':pct(t.pct)}</td>
+      <td class="${valueClass}">${escapeHtml(displayTradeNote(t.notes))}</td>
+    </tr>`;
+  }).join('');
 }
 
 function chartDefaults(){
